@@ -6,7 +6,22 @@ Full-season management tool for an ESPN fantasy football family league: draft ki
 
 The framing is credit-risk portfolio management applied to a roster: a projection is an expected return, boom/bust is volatility, a starting lineup is a portfolio selected under a target quantile rather than a target mean, and P(first) is the analog of a default probability that every decision is priced against. That framing is the differentiator versus every other fantasy repo on GitHub.
 
-League format: **snake draft**. Draft date not yet scheduled as of 2026-08-06 — build to mid-August readiness so the tool is never the blocker.
+## The league
+
+League "Rice Ball" (id 1815614957), verified against the API on 2026-08-06:
+
+- **8 teams**, snake draft, no keepers, waiver priority (no FAAB)
+- **Full PPR**, 4pt passing TD, 0.04/passing yard, 0.1/rushing and receiving yard
+- Starters (9): 1 QB, 2 RB, 2 WR, 1 TE, 1 FLEX (RB/WR/TE), 1 D/ST, 1 K; 7 bench, 2 IR
+- 13-week regular season, **4 of 8 make the playoffs**, 1-week playoff matchups
+
+Three properties of this format drive the modeling and are easy to get wrong:
+
+1. **Eight teams compresses positional scarcity.** Only 72 roster spots start each week, so replacement level is very high and the waiver wire stays deep all season — a streamed QB is worth about what QB8 is worth. The scarcity gradient that powers a normal VOR board is much flatter here, the real draft edge sits in RB/WR, and QB/TE/K/D/ST belong late. A board that recommends an early QB in this league is miscalibrated, not clever.
+2. **Half the league makes the playoffs, and matchups are one week long.** P(first) ≈ P(top 4) × P(win semi) × P(win final), where qualifying is the cheap term and the title comes down to two single-game outcomes. Seeding is worth little beyond making it. So the regular season is played for **floor** — just qualify — and weeks 14–15 are played for **ceiling**. Season-long expected points is the wrong objective in this format, which is the whole reason the P(first) simulator is the spine rather than a nice extra.
+3. **Waiver priority, not FAAB.** The transactions problem is sequential — when to spend a priority position — not a budget allocation.
+
+Draft date not yet scheduled as of 2026-08-06 — build to mid-August readiness so the tool is never the blocker.
 
 ## Scope
 
@@ -37,5 +52,5 @@ League format: **snake draft**. Draft date not yet scheduled as of 2026-08-06 �
 ## Open questions
 
 1. Draft date not scheduled as of 2026-08-06 — mid-August readiness is the working target.
-2. Keeper rules, scoring, and roster slots unknown until the 2026 league is created; all are read from the API rather than assumed.
-3. Is the 2026 league created yet? Until it is, development runs against the prior season's league ID.
+2. How many prior seasons does this league have? Opponent-behavior modeling and the box-score reconciliation gate both need history; if 2026 is the league's first season, step 6's opponent model falls back to public ADP alone.
+3. Does the flat scarcity gradient in an 8-team league leave enough draft-day edge to be worth the modeling, or does the real advantage sit in weekly lineups and waivers? Worth measuring explicitly in the step 6 rehearsal rather than assuming.
