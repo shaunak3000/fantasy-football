@@ -1,0 +1,42 @@
+[project]
+name = "fantasy-football"
+version = "0.1.0"
+description = "ESPN fantasy football full-season manager: draft kit, lineup optimizer, and trade evaluation optimized for probability of finishing first"
+readme = "README.md"
+authors = [
+    { email = "shaunak3000@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "espn-api>=0.46.0",
+    "matplotlib>=3.11.0",
+    "nflreadpy>=0.1.5",
+    "numpy>=2.4.6",
+    "pandas>=3.0.3",
+    "polars>=1.20",
+    "pulp>=3.0",
+    "pyarrow>=19.0",
+    "python-dotenv>=1.1",
+    "requests>=2.34.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.8,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.0",
+    "pytest>=9.1.1",
+    "ruff>=0.9",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
