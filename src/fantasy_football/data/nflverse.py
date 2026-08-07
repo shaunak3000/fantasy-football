@@ -42,8 +42,17 @@ def load_player_ids(refresh: bool = False) -> pl.DataFrame:
 
 
 def load_rankings(refresh: bool = False) -> pl.DataFrame:
-    """All FantasyPros consensus ranking boards, every format and position."""
+    """Current consensus ranking boards, every format and position."""
     return _cached("ff_rankings_draft", lambda: nfl.load_ff_rankings("draft"), refresh)
+
+
+def load_rankings_history(refresh: bool = False) -> pl.DataFrame:
+    """Every consensus board ever scraped, back to 2019.
+
+    Large (~1.8M rows) but it is the only way to see what the consensus believed
+    *before* a season, which is what any honest backtest has to be fit on.
+    """
+    return _cached("ff_rankings_all", lambda: nfl.load_ff_rankings("all"), refresh)
 
 
 def load_consensus_board(board: str = DEFAULT_BOARD, refresh: bool = False) -> pl.DataFrame:
