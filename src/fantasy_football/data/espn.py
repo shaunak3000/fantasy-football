@@ -8,6 +8,7 @@ league is hardcoded anywhere else in the repo.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,12 +26,35 @@ STARTABLE_SLOTS = frozenset(
 NON_STARTABLE_SLOTS = frozenset({"BE", "IR", "ER", "Rookie", ""})
 
 
+# ESPN's player-position enumeration, which is *not* the lineup-slot enumeration
+# in POSITION_MAP. Team defenses happen to be 16 in both.
+DST_POSITION_ID = 16
+
+
 @dataclass(frozen=True)
 class ScoringRule:
+    """A single scoring rule, with the per-position exceptions ESPN allows.
+
+    A league can score the same stat differently by position — this one gives a
+    team defense -2 for allowing 400-449 yards while scoring it 0 for everyone
+    else. Collapsing the override onto the base value (which is what espn-api
+    does) would apply defensive scoring to skill players.
+    """
+
     stat_id: int
     abbr: str
     label: str
     points: float
+    position_overrides: Mapping[int, float] = field(default_factory=dict)
+
+    def points_for(self, position_id: int | None = None) -> float:
+        if position_id is not None and position_id in self.position_overrides:
+            return self.position_overrides[position_id]
+        return self.points
+
+    @property
+    def is_active(self) -> bool:
+        return bool(self.points) or any(self.position_overrides.values())
 
 
 @dataclass(frozen=True)
@@ -118,17 +142,19 @@ def parse_settings(raw: dict, league_id: int, season: int) -> LeagueSettings:
     for item in scoring.get("scoringItems", []):
         stat_id = item["statId"]
         meta = SETTINGS_SCORING_FORMAT_MAP.get(stat_id, {"abbr": "UNK", "label": "Unknown"})
-        points = item.get("pointsOverrides", {}).get("16") or item.get("points", 0)
+        base = float(item.get("points", 0) or 0)
+        overrides = {int(k): float(v) for k, v in (item.get("pointsOverrides") or {}).items()}
         rules.append(
             ScoringRule(
                 stat_id=stat_id,
                 abbr=meta["abbr"],
                 label=meta["label"],
-                points=float(points),
+                points=base,
+                position_overrides=overrides,
             )
         )
         if stat_id == RECEPTION_STAT_ID:
-            ppr = float(points)
+            ppr = base
 
     return LeagueSettings(
         league_id=league_id,
@@ -177,6 +203,70 @@ def snapshot_settings(league: League, creds: EspnCredentials) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+ACTUAL_STAT_SOURCE = 0
+PROJECTED_STAT_SOURCE = 1
+WEEKLY_SPLIT = 1
+
+
+@dataclass(frozen=True)
+class PlayerWeek:
+    """One player's actual production in one week, in ESPN's own stat-id space.
+
+    `stats` is raw production keyed by stat id; `applied_total` is the points ESPN
+    awarded. Keeping both is what makes the scoring engine checkable: the engine
+    reads `stats` and must land on `applied_total`.
+    """
+
+    espn_id: int
+    name: str
+    position_id: int
+    week: int
+    stats: Mapping[int, float]
+    applied_stats: Mapping[int, float]
+    applied_total: float
+
+
+def fetch_player_weeks(league: League, week: int) -> list[PlayerWeek]:
+    """Every rostered player's actual stat line for one week.
+
+    Reads the raw roster payload rather than `box_scores()`, which raises on
+    historical seasons because ESPN omits `rosterForCurrentScoringPeriod` there.
+    """
+    data = league.espn_request.league_get(params={"view": "mRoster", "scoringPeriodId": week})
+
+    out: list[PlayerWeek] = []
+    for team in data.get("teams", []):
+        for entry in team.get("roster", {}).get("entries", []):
+            player = entry.get("playerPoolEntry", {}).get("player", {})
+            actual = next(
+                (
+                    s
+                    for s in player.get("stats", [])
+                    if s.get("statSourceId") == ACTUAL_STAT_SOURCE
+                    and s.get("statSplitTypeId") == WEEKLY_SPLIT
+                    and s.get("scoringPeriodId") == week
+                ),
+                None,
+            )
+            if actual is None:
+                continue
+
+            out.append(
+                PlayerWeek(
+                    espn_id=player.get("id"),
+                    name=player.get("fullName", ""),
+                    position_id=player.get("defaultPositionId", -1),
+                    week=week,
+                    stats={int(k): float(v) for k, v in (actual.get("stats") or {}).items()},
+                    applied_stats={
+                        int(k): float(v) for k, v in (actual.get("appliedStats") or {}).items()
+                    },
+                    applied_total=float(actual.get("appliedTotal") or 0.0),
+                )
+            )
+    return out
 
 
 def load_settings_snapshot(league_id: int, season: int) -> LeagueSettings:

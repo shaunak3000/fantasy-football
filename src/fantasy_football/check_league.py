@@ -58,10 +58,18 @@ def main() -> int:
     for team in league.teams:
         print(f"  {team.team_name}")
 
-    nonzero = [r for r in settings.scoring_rules if r.points]
-    print(f"\nScoring rules in effect ({len(nonzero)}):")
-    for rule in nonzero:
-        print(f"  {rule.abbr:<8} {rule.points:>6}  {rule.label}")
+    active = [r for r in settings.scoring_rules if r.is_active]
+    print(f"\nScoring rules in effect ({len(active)}):")
+    for rule in active:
+        # A rule can be worth nothing to skill players and something to a team
+        # defense, so show both rather than flattening them together.
+        note = ""
+        if rule.position_overrides:
+            overrides = ", ".join(
+                f"pos{p}={v:g}" for p, v in sorted(rule.position_overrides.items())
+            )
+            note = f"   [{overrides}]"
+        print(f"  {rule.abbr:<8} {rule.points:>6g}  {rule.label}{note}")
 
     path = snapshot_settings(league, creds)
     print(f"\nSnapshot written to {path}")
