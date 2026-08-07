@@ -131,6 +131,18 @@ def training_table(
             pl.col("weekly_sd").fill_null(0.0),
         )
 
+        # Points per game *played*, which is a different quantity from the
+        # season total and the one a weekly lineup decision needs: given the
+        # player suits up, what does he do? Availability is modelled separately,
+        # so leave it null rather than zero for players who never played —
+        # a zero here would be a statement about production, not absence.
+        joined = joined.with_columns(
+            pl.when(pl.col("games_played") > 0)
+            .then(pl.col("actual_points") / pl.col("games_played"))
+            .otherwise(None)
+            .alias("points_per_game")
+        )
+
         coverage.append(
             Coverage(
                 season=season,
@@ -154,6 +166,7 @@ def training_table(
                     "actual_points",
                     "games_played",
                     "weekly_sd",
+                    "points_per_game",
                 ]
             )
         )

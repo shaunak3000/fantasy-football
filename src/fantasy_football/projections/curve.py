@@ -20,6 +20,11 @@ import polars as pl
 DEFAULT_WINDOW = 6
 MIN_SAMPLES = 8
 
+# Outcomes at a given rank are right-skewed with a lump of zeros from players who
+# got hurt or lost a job. A mean and standard deviation describe that badly, so
+# the curve carries empirical quantiles and intervals are read straight off them.
+QUANTILE_LEVELS = (0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
+
 
 @dataclass(frozen=True)
 class RankCurve:
@@ -31,6 +36,33 @@ class RankCurve:
     spread: np.ndarray
     n_observations: int = 0
     seasons: tuple[int, ...] = field(default_factory=tuple)
+    # Shape (len(ranks), len(QUANTILE_LEVELS)); empty when not fitted.
+    quantiles: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
+
+    def quantile_at(self, rank: float, level: float) -> float:
+        """Empirical quantile of outcomes for a player at this preseason rank."""
+        if self.quantiles.size == 0:
+            raise ValueError("curve carries no quantiles")
+        try:
+            column = QUANTILE_LEVELS.index(level)
+        except ValueError as exc:
+            raise ValueError(f"level must be one of {QUANTILE_LEVELS}") from exc
+        return float(np.interp(rank, self.ranks, self.quantiles[:, column]))
+
+    def interval_at(self, rank: float, coverage: float = 0.80) -> tuple[float, float]:
+        """Central interval with the requested nominal coverage."""
+        tail = round((1.0 - coverage) / 2.0, 3)
+        upper = round(1.0 - tail, 3)
+        return self.quantile_at(rank, tail), self.quantile_at(rank, upper)
+
+    def probability_below(self, rank: float, points: float) -> float:
+        """Roughly where an outcome falls in the predicted distribution.
+
+        Interpolates across the stored quantile levels, which is what the
+        calibration check needs to build its PIT histogram.
+        """
+        curve_points = [self.quantile_at(rank, level) for level in QUANTILE_LEVELS]
+        return float(np.interp(points, curve_points, QUANTILE_LEVELS))
 
     def points_at(self, rank: float) -> float:
         """Expected points at a possibly fractional rank.
@@ -59,22 +91,36 @@ class RankCurve:
 
 
 def fit_rank_curve(
-    training: pl.DataFrame, position: str, window: int = DEFAULT_WINDOW
+    training: pl.DataFrame,
+    position: str,
+    window: int = DEFAULT_WINDOW,
+    value_col: str = "actual_points",
+    monotone: bool = True,
 ) -> RankCurve | None:
-    """Fit one position's curve from the pooled player-seasons."""
-    subset = training.filter(pl.col("pos") == position).select(
-        ["pos_rank", "actual_points", "season"]
+    """Fit one position's curve from the pooled player-seasons.
+
+    `value_col` selects what is being predicted — season points, points per game,
+    weekly spread. `monotone` should stay on for anything that genuinely has to
+    fall as rank worsens, and off for quantities that do not (games played is
+    only weakly related to preseason rank, so forcing it downward invents a
+    trend the data does not support).
+    """
+    subset = (
+        training.filter(pl.col("pos") == position)
+        .select(["pos_rank", value_col, "season"])
+        .drop_nulls(value_col)
     )
     if subset.height < MIN_SAMPLES:
         return None
 
     ranks_obs = subset["pos_rank"].to_numpy()
-    points_obs = subset["actual_points"].to_numpy()
+    points_obs = subset[value_col].to_numpy().astype(float)
 
     max_rank = int(ranks_obs.max())
     grid = np.arange(1, max_rank + 1)
     expected = np.zeros(len(grid))
     spread = np.zeros(len(grid))
+    quantiles = np.zeros((len(grid), len(QUANTILE_LEVELS)))
 
     for i, rank in enumerate(grid):
         window_mask = np.abs(ranks_obs - rank) <= window
@@ -88,10 +134,15 @@ def fit_rank_curve(
         sample = points_obs[window_mask]
         expected[i] = sample.mean()
         spread[i] = sample.std(ddof=1) if len(sample) > 1 else 0.0
+        quantiles[i] = np.quantile(sample, QUANTILE_LEVELS)
 
     # Expected points cannot rise with a worse preseason rank. Where the raw
-    # window says otherwise it is noise, so enforce the monotonicity.
-    expected = np.minimum.accumulate(expected)
+    # window says otherwise it is noise, so enforce the monotonicity — on each
+    # quantile level independently, so the whole distribution shifts down
+    # together and intervals cannot cross.
+    if monotone:
+        expected = np.minimum.accumulate(expected)
+        quantiles = np.minimum.accumulate(quantiles, axis=0)
 
     return RankCurve(
         position=position,
@@ -100,6 +151,7 @@ def fit_rank_curve(
         spread=spread,
         n_observations=subset.height,
         seasons=tuple(sorted(set(subset["season"].to_list()))),
+        quantiles=quantiles,
     )
 
 
@@ -160,10 +212,17 @@ def replacement_points(settings, curves: dict[str, RankCurve]) -> dict[str, floa
     }
 
 
-def fit_all(training: pl.DataFrame, window: int = DEFAULT_WINDOW) -> dict[str, RankCurve]:
+def fit_all(
+    training: pl.DataFrame,
+    window: int = DEFAULT_WINDOW,
+    value_col: str = "actual_points",
+    monotone: bool = True,
+) -> dict[str, RankCurve]:
     curves = {}
     for position in training["pos"].unique().to_list():
-        curve = fit_rank_curve(training, position, window=window)
+        curve = fit_rank_curve(
+            training, position, window=window, value_col=value_col, monotone=monotone
+        )
         if curve is not None:
             curves[position] = curve
     return curves
