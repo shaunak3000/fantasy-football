@@ -39,6 +39,7 @@ def projection(rank=1.0, position="RB", player="Alpha"):
         team="DET",
         espn_id=1,
         consensus_rank=int(rank),
+        consensus_overall_rank=int(rank),
         espn_rank=int(rank),
         blended_rank=rank,
         mean=250.0,

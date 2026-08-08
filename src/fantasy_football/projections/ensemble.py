@@ -38,6 +38,10 @@ class Projection:
     team: str
     espn_id: int | None
     consensus_rank: int
+    # Rank across every position, not within one. Value depends on positional
+    # rank, but *draft position* depends on overall rank — QB1 and WR1 are both
+    # "rank 1" and go dozens of picks apart.
+    consensus_overall_rank: int
     espn_rank: int | None
     blended_rank: float
     mean: float
@@ -79,7 +83,9 @@ def build_projections(
     has no projection for still get a projection from consensus alone rather
     than being dropped.
     """
-    ranked = _positional_rank(board.sort("ecr"), "ecr", descending=False)
+    ranked = _positional_rank(board.sort("ecr"), "ecr", descending=False).with_columns(
+        pl.col("ecr").rank("ordinal").cast(pl.Int32).alias("ecr_overall_rank")
+    )
 
     espn_col = pl.col("espn_id").map_elements(
         lambda pid: espn_points.get(pid), return_dtype=pl.Float64
@@ -128,6 +134,7 @@ def build_projections(
                 team=row["team"],
                 espn_id=row.get("espn_id"),
                 consensus_rank=consensus_rank,
+                consensus_overall_rank=int(row["ecr_overall_rank"]),
                 espn_rank=espn_rank,
                 blended_rank=blended,
                 mean=mean,
