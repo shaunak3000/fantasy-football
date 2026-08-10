@@ -40,3 +40,10 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# PuLP 3.x warns about API changes coming in 4.0. The current calls work; the
+# migration is deliberately deferred rather than swapping solvers close to a
+# live draft. Revisit when pinning PuLP 4.
+filterwarnings = [
+    "ignore:Constructing LpVariable:DeprecationWarning",
+    "ignore:PULP_CBC_CMD is deprecated:DeprecationWarning",
+]
