@@ -58,6 +58,27 @@ def best_available_at_need(state, projections, settings, by_id):
     return min(eligible, key=lambda p: p.consensus_overall_rank).espn_id
 
 
+def best_vor_at_need(state, projections, settings, by_id):
+    """Highest value-over-replacement at a position still open.
+
+    The natural hybrid, and it exists because consensus rank and value disagree
+    more than you would think. At the same point on the board a running back
+    projected 28 points higher can sit one rank *lower* than a receiver, since
+    rank blends positional scarcity in its own way. This orders by the quantity
+    that is actually comparable across positions while keeping the roster
+    discipline that made the baseline work.
+    """
+    taken = state.drafted_set
+    available = [p for p in projections if p.espn_id not in taken]
+    if not available:
+        return None
+
+    limits = roster_limits(settings)
+    needed = _needed(_counts(state.my_roster, by_id), limits)
+    eligible = [p for p in available if p.position in needed] or available
+    return max(eligible, key=lambda p: p.vor).espn_id
+
+
 def tiered(state, projections, settings, by_id):
     """Best available at need, unless a tier is about to be wiped out.
 

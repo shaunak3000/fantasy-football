@@ -31,7 +31,7 @@ from .history import board_with_ids, load_draft
 from .model import fit_pick_model
 from .recommend import recommend, roster_limits
 from .state import DraftState
-from .strategies import best_available_at_need, rollout, tiered
+from .strategies import best_available_at_need, best_vor_at_need, rollout, tiered
 
 # Starting requirements scored head to head. Kickers and defenses are excluded
 # because neither the board nor the humans meaningfully predict them, so
@@ -222,6 +222,7 @@ def rehearse_slot(
     contenders = {
         "adp": best_available_strategy(False),
         "need": best_available_at_need,
+        "vorneed": best_vor_at_need,
         "tier": tiered,
         "board": board_chooser,
         "rollout": rollout(pick_model, objective="points"),

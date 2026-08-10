@@ -54,7 +54,24 @@ Draft date not yet scheduled as of 2026-08-06 — build to mid-August readiness 
 
       **Live draft night** (`live_draft.py`, `draft/live.py`, `draft/cache.py`) requires no typing. ESPN pre-allocates all 128 pick slots and fills in `playerId` as picks are made, so `watch` polls `mDraftDetail`, re-ranks, and says what to take — you draft in ESPN exactly as normal. The draft slot is detected from the SWID against `pickOrder` rather than typed. `prepare` precomputes the whole bundle beforehand, so nothing slow or network-dependent runs while a 90-second clock is going; a live re-rank takes 0.08s. `manual` drives the same board by typing picks, for an offline draft or a dead feed. State is rebuilt from the feed each poll rather than appended to, so a missed poll self-heals.
 
-      Remaining: a rehearsal scored against the actual 2025 draft.
+      **The rehearsal overturned the design.** Replaying the real 2025 draft at all 8 slots, fit only on prior seasons, and scoring each resulting roster by what its players actually did:
+
+      | strategy | mean roster | vs baseline |
+      |----------|------------|-------------|
+      | **best available at need** | **1793** | baseline |
+      | full-draft rollout | 1783 | −10 (0.3 SE) |
+      | best VOR at need | 1767 | −27 (1.1 SE) |
+      | rollout, championship objective | 1745 | −49 (0.8 SE) |
+      | the humans | 1712 | −81 |
+      | tier-aware | 1704 | −89 |
+      | monte carlo lookahead board | 1553 | −241 (5.2 SE) |
+      | pure best-available | 1422 | −371 (7.5 SE) |
+
+      Nothing beat "take the highest-ranked player at a position you still need". The elaborate board *lost* by 241 points at 5.2 standard errors. The rollout confirmed the diagnosis — judging a pick by the finished roster rather than the roster so far moved it from −241 to −10 — and then produced the same picks as the one-liner at hundreds of times the cost.
+
+      Two findings worth keeping: the projections carry real weight (they separate 1793 from pure best-available's 1422), and **consensus rank beats our own VOR** for ordering within a need, because expert rank already aggregates injury and depth-chart information a mechanical curve transform cannot recover. So the decision rule is the simple one; the simulation now only supplies survival odds for context. `board_view` keeps information and authority deliberately separate.
+
+      Caveat on the championship objective: it was scored by expected points, which is the metric it is deliberately not optimizing, so its −49 is not evidence against it. Judging it fairly needs the season simulator.
 - [ ] 8. **Weekly lineup optimizer** (`lineup/`) — MILP via PuLP over the league's real slot and eligibility rules. Objective is selected by matchup state: maximize expected points when evenly matched, maximize P(beating this specific opponent) when a heavy underdog or heavy favorite. Property tests guarantee it can never return an illegal lineup.
 - [ ] 9. **Waivers + trades** (`transactions/`) — rest-of-season projections drive add/drop and trade evaluation, with every candidate move priced as a delta in P(first), not a delta in points. Waiver-priority aware (this league does not use FAAB).
 - [ ] 10. **Season simulator** (`season/`) — Monte Carlo the remaining schedule using the projection distributions to produce P(first) per manager, plus playoff seeding odds. This feeds the risk posture in steps 8 and 9 and is the repo's headline chart.

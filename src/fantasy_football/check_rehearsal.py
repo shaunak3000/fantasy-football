@@ -16,6 +16,7 @@ from .draft.rehearse import rehearse
 STRATEGIES = [
     ("adp", "pure best-available"),
     ("need", "best available at need"),
+    ("vorneed", "best VOR at need"),
     ("tier", "tier-aware"),
     ("board", "monte carlo board"),
     ("rollout", "full-draft rollout"),

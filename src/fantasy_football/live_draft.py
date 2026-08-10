@@ -8,6 +8,12 @@
 this notices each pick, re-ranks, and tells you what to take when your turn
 comes around. `manual` is the same board driven by typing picks, for an offline
 draft or a dead feed.
+
+The pick it recommends comes from the only strategy that survived the rehearsal
+against the 2025 draft: the highest-ranked player at a position you still need.
+Several more elaborate rules were tested and none beat it; one lost badly. The
+simulation still runs, but only to tell you who is likely to be gone by your
+next turn — it advises, it does not decide. See `check_rehearsal` for the bench.
 """
 
 from __future__ import annotations
@@ -19,11 +25,12 @@ from espn_api.football import League
 
 from .config import load_credentials
 from .data.espn import fetch_raw_settings, parse_settings
+from .draft.board_view import board_view
 from .draft.cache import load_bundle, save_bundle
 from .draft.history import pick_training
 from .draft.live import DraftFeed, draft_order, my_team_id, slot_for_team, sync_state
 from .draft.model import fit_pick_model
-from .draft.recommend import recommend, roster_limits
+from .draft.recommend import roster_limits
 from .draft.state import DraftState
 from .projections.build import build
 
@@ -95,25 +102,25 @@ def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> 
             print("=" * 72)
             return
 
-    options = recommend(
+    rows = board_view(
         state, bundle.projections.projections, bundle.pick_model, settings, trials=LIVE_TRIALS
     )
-    if not options:
+    if not rows:
         print("No players left to recommend.")
         print("=" * 72)
         return
 
     if state.is_my_turn:
-        best = options[0]
+        best = next((row for row in rows if row.recommended), rows[0])
         print(f"\n  >>> TAKE: {best.player} ({best.position}, {best.team})")
         print(f"      {best.rationale()}")
 
-    print(f"\n  {'player':<22} {'pos':<4} {'VOR':>6} {'survive':>8} {'2-pick':>8}")
-    for option in options[:6]:
-        flag = " <-gone" if option.likely_gone else ""
+    print(f"\n  {'player':<22} {'pos':<4} {'rank':>5} {'VOR':>6} {'survive':>8}")
+    for row in rows[:6]:
+        flag = " <-gone" if row.likely_gone else ""
         print(
-            f"  {option.player:<22} {option.position:<4} {option.vor:>6.1f} "
-            f"{option.survival:>7.0%} {option.two_pick_value:>8.1f}{flag}"
+            f"  {row.player:<22} {row.position:<4} {row.overall_rank:>5} "
+            f"{row.vor:>6.0f} {row.survival:>7.0%}{flag}"
         )
     print(f"\n  still need: {', '.join(still_need) if still_need else 'nothing'}")
     print("=" * 72)
