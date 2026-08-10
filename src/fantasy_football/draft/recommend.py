@@ -20,6 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..projections.ensemble import Projection
+from .lineup_value import marginal_value, roster_points
 from .model import PickModel
 from .state import DraftState
 
@@ -108,7 +109,6 @@ def recommend(
     seed: int = 0,
 ) -> list[Recommendation]:
     """Rank the available players by what taking them now is actually worth."""
-    limits = roster_limits(settings)
     taken = state.drafted_set
 
     available = [p for p in projections if p.espn_id is None or p.espn_id not in taken]
@@ -121,8 +121,20 @@ def recommend(
             my_counts[projection.position] = my_counts.get(projection.position, 0) + 1
 
     gap = state.picks_until_my_next()
-    vors = np.array([p.vor for p in available], dtype=float)
     positions = [p.position for p in available]
+
+    # The decision value is marginal improvement to the lineup you can start,
+    # not value over a league-wide replacement. VOR cannot tell a sixth receiver
+    # from a first running back; this can, and without it the board drafts one
+    # position until the roster is unstartable.
+    by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
+    my_roster = roster_points(state.my_roster, by_id)
+    replacement = {p.position: p.replacement for p in projections}
+
+    vors = np.array(
+        [marginal_value(p.position, p.mean, my_roster, settings, replacement) for p in available],
+        dtype=float,
+    )
 
     # Value comes from positional rank; draft order comes from overall rank.
     # Board position is where each player sits among those still available, which
@@ -144,33 +156,43 @@ def recommend(
         # there is no uncertainty to simulate.
         results = []
         for i in order_by_value:
-            counts = dict(my_counts)
-            counts[positions[i]] = counts.get(positions[i], 0) + 1
-            needed = _needed_positions(counts, limits)
-            partner = next(
+            i = int(i)
+            after = {position: list(points) for position, points in my_roster.items()}
+            after.setdefault(positions[i], []).append(available[i].mean)
+            partner = max(
                 (
-                    float(vors[j])
-                    for j in np.argsort(-vors)
-                    if int(j) != int(i) and positions[int(j)] in needed
+                    marginal_value(positions[j], available[j].mean, after, settings, replacement)
+                    for j in range(len(available))
+                    if j != i
                 ),
-                0.0,
+                default=0.0,
             )
-            results.append(_build(available[i], 1.0, float(vors[i]), partner))
+            results.append(_build(available[i], 1.0, float(vors[i]), float(partner)))
         results.sort(key=lambda r: -r.two_pick_value)
         return results
 
-    # Scanning for the best survivor only needs to look at players who could
-    # plausibly be the answer, but the pool must be wider than the candidate
-    # list or a run of unlucky simulations would find nothing left.
-    survivor_pool = np.argsort(-vors)[: CANDIDATES_CONSIDERED * 4]
+    # The best follow-up pick depends on which candidate was taken, because the
+    # roster it would join is different. Precompute one preference ordering per
+    # candidate — cheap up front, and it keeps the inner trial loop to a scan.
+    pool_size = CANDIDATES_CONSIDERED * 4
+    follow_up_order: dict[int, list[int]] = {}
+    follow_up_value: dict[int, dict[int, float]] = {}
 
-    # Needed positions depend only on which position the candidate fills, so
-    # resolve them once per position instead of once per candidate per trial.
-    needed_by_position: dict[str, set[str]] = {}
-    for position in {positions[i] for i in order_by_value}:
-        counts = dict(my_counts)
-        counts[position] = counts.get(position, 0) + 1
-        needed_by_position[position] = _needed_positions(counts, limits)
+    for candidate in order_by_value:
+        candidate = int(candidate)
+        after = {position: list(points) for position, points in my_roster.items()}
+        after.setdefault(positions[candidate], []).append(available[candidate].mean)
+
+        scored = []
+        for i in np.argsort(-vors)[:pool_size]:
+            i = int(i)
+            if i == candidate:
+                continue
+            value = marginal_value(positions[i], available[i].mean, after, settings, replacement)
+            scored.append((value, i))
+        scored.sort(reverse=True)
+        follow_up_order[candidate] = [i for _, i in scored]
+        follow_up_value[candidate] = {i: value for value, i in scored}
 
     rng = np.random.default_rng(seed)
     totals = np.zeros(len(order_by_value))
@@ -199,15 +221,10 @@ def recommend(
                 )
             else:
                 gone = base_taken
-            needed = needed_by_position[positions[candidate]]
-
             best_next = 0.0
-            for i in survivor_pool:
-                i = int(i)
-                if i == candidate or i in gone:
-                    continue
-                if positions[i] in needed:
-                    best_next = float(vors[i])
+            for i in follow_up_order[candidate]:
+                if i not in gone:
+                    best_next = follow_up_value[candidate][i]
                     break
 
             totals[slot_index] += vors[candidate] + best_next
@@ -239,6 +256,9 @@ def _build(
         team=projection.team,
         espn_id=projection.espn_id,
         consensus_rank=projection.consensus_rank,
+        # `vor` on a recommendation is the marginal gain to *your* lineup, which
+        # is what the decision runs on. The league-wide VOR lives on the
+        # projection and is only useful for comparing players in the abstract.
         vor=vor,
         mean=projection.mean,
         sd=projection.sd,

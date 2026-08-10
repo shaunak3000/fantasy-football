@@ -77,7 +77,21 @@ def board_with_ids(season: int) -> pl.DataFrame:
     return (
         matched.matched.filter(pl.col("espn_id").is_not_null())
         .with_columns(pl.col("ecr").rank("ordinal").cast(pl.Int32).alias("consensus_rank"))
-        .select(["season", "player", "pos", "espn_id", "ecr", "consensus_rank", "pos_rank"])
+        # `team` feeds the projection builder and `gsis_id` joins to actual
+        # results, so both have to survive the projection.
+        .select(
+            [
+                "season",
+                "player",
+                "pos",
+                "team",
+                "espn_id",
+                "gsis_id",
+                "ecr",
+                "consensus_rank",
+                "pos_rank",
+            ]
+        )
     )
 
 
