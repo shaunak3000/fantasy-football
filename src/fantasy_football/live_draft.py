@@ -31,6 +31,7 @@ from .draft.history import pick_training
 from .draft.live import DraftFeed, draft_order, my_team_id, slot_for_team, sync_state
 from .draft.model import fit_pick_model
 from .draft.recommend import roster_limits
+from .draft.script import DEFAULT_TRIALS, forecast, target_survival
 from .draft.state import DraftState
 from .projections.build import build
 
@@ -124,6 +125,46 @@ def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> 
         )
     print(f"\n  still need: {', '.join(still_need) if still_need else 'nothing'}")
     print("=" * 72)
+
+
+def plan() -> int:
+    """Forward plan for the whole draft, produced before it starts."""
+    bundle = _load_or_complain()
+    if bundle is None:
+        return 1
+
+    creds = load_credentials()
+    league = _league(creds)
+    settings = parse_settings(fetch_raw_settings(league), creds.league_id, SEASON)
+
+    order = draft_order(league)
+    team_id = my_team_id(league, creds.swid)
+    slot = slot_for_team(order, team_id) or 1
+
+    projections = bundle.projections.projections
+    print(f"Draft slot {slot} of {len(order)}. Simulating {DEFAULT_TRIALS} drafts...\n")
+
+    print("Who is still on the board at your first pick:")
+    print(f"  {'player':<24}{'pos':<5}{'rank':>5}{'available':>11}")
+    for player, position, rank, survival in target_survival(
+        slot, projections, bundle.pick_model, settings, rounds=ROUNDS
+    ):
+        marker = "" if survival > 0.5 else "   unlikely"
+        print(f"  {player:<24}{position:<5}{rank:>5}{survival:>10.0%}{marker}")
+
+    print("\nWhat you end up with, pick by pick:")
+    print(f"  {'pick':>5} {'rnd':>4}  {'most likely':<28}{'pos mix':<22}{'proj':>7}{'VOR':>7}")
+    for item in forecast(slot, projections, bundle.pick_model, settings, rounds=ROUNDS):
+        mix = ", ".join(f"{p} {s:.0%}" for p, s in list(item.position_mix.items())[:3])
+        print(
+            f"  {item.pick_number:>5} {item.round_number:>4}  {item.headline():<28}"
+            f"{mix:<22}{item.mean_points:>7.0f}{item.mean_vor:>7.0f}"
+        )
+
+    print("\n  'most likely' is the single most frequent outcome across simulations;")
+    print("  the position mix shows what the pick usually turns into. Treat this as")
+    print("  the shape of your draft, not a script to follow blindly.")
+    return 0
 
 
 def watch() -> int:
@@ -230,11 +271,16 @@ def main(argv: list[str]) -> int:
     command = argv[0] if argv else "watch"
     if command == "prepare":
         return prepare()
+    if command == "plan":
+        return plan()
     if command == "watch":
         return watch()
     if command == "manual":
         return manual()
-    print(f"Unknown command {command!r}. Use: prepare | watch | manual", file=sys.stderr)
+    print(
+        f"Unknown command {command!r}. Use: prepare | plan | watch | manual",
+        file=sys.stderr,
+    )
     return 1
 
 
