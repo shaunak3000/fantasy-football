@@ -31,6 +31,7 @@ from .history import board_with_ids, load_draft
 from .model import fit_pick_model
 from .recommend import recommend, roster_limits
 from .state import DraftState
+from .strategies import best_available_at_need, rollout, tiered
 
 # Starting requirements scored head to head. Kickers and defenses are excluded
 # because neither the board nor the humans meaningfully predict them, so
@@ -52,28 +53,14 @@ class RosterScore:
 @dataclass
 class SlotResult:
     slot: int
-    tool: RosterScore
-    human: RosterScore
-    adp: RosterScore | None = None
-    adp_needs: RosterScore | None = None
+    scores: dict[str, RosterScore] = field(default_factory=dict)
 
-    @property
-    def edge(self) -> float:
-        return self.tool.total - self.human.total
+    def total(self, name: str) -> float:
+        score = self.scores.get(name)
+        return score.total if score else 0.0
 
-    @property
-    def edge_over_adp(self) -> float:
-        """The number that matters most: is the modelling earning its keep?
-
-        Beating the humans in a single season could be luck either way. Beating
-        a bot that simply takes the highest-ranked player left is a claim about
-        the method, measured against the same opponents in the same draft.
-        """
-        return 0.0 if self.adp is None else self.tool.total - self.adp.total
-
-    @property
-    def edge_over_adp_needs(self) -> float:
-        return 0.0 if self.adp_needs is None else self.tool.total - self.adp_needs.total
+    def edge(self, name: str, against: str = "human") -> float:
+        return self.total(name) - self.total(against)
 
 
 def best_available_strategy(respect_roster_needs: bool):
@@ -212,7 +199,7 @@ def rehearse_slot(
     rounds: int,
     trials: int = 200,
 ) -> SlotResult:
-    """Replay one draft three ways and score all of them against reality."""
+    """Replay one draft under every strategy and score them all against reality."""
     by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
 
     def board_chooser(state, projs, sets, ids):
@@ -232,31 +219,20 @@ def rehearse_slot(
     )
     human_roster = [p.espn_id for p in actual_picks if p.overall_pick in picks_for_me]
 
-    return SlotResult(
-        slot=slot,
-        tool=score(replay(slot, board_chooser, projections, settings, actual_picks, rounds)),
-        adp=score(
-            replay(
-                slot,
-                best_available_strategy(False),
-                projections,
-                settings,
-                actual_picks,
-                rounds,
-            )
-        ),
-        adp_needs=score(
-            replay(
-                slot,
-                best_available_strategy(True),
-                projections,
-                settings,
-                actual_picks,
-                rounds,
-            )
-        ),
-        human=score(human_roster),
-    )
+    contenders = {
+        "adp": best_available_strategy(False),
+        "need": best_available_at_need,
+        "tier": tiered,
+        "board": board_chooser,
+        "rollout": rollout(pick_model, objective="points"),
+        "champ": rollout(pick_model, objective="championship"),
+    }
+
+    scores = {"human": score(human_roster)}
+    for name, chooser in contenders.items():
+        scores[name] = score(replay(slot, chooser, projections, settings, actual_picks, rounds))
+
+    return SlotResult(slot=slot, scores=scores)
 
 
 def rehearse(season: int, creds, rounds: int = 16, trials: int = 200) -> list[SlotResult]:
