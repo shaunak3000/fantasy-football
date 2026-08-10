@@ -23,12 +23,37 @@ def main(argv: list[str]) -> int:
 
     results = rehearse(season, creds)
 
-    print(f"  {'slot':>5} {'board':>9} {'human':>9} {'edge':>9}")
+    header = (
+        f"  {'slot':>5} {'board':>9} {'adp':>9} {'adp+need':>9} {'human':>9} "
+        f"{'vs adp':>8} {'vs human':>9}"
+    )
+    print(header)
     for result in results:
-        marker = "" if result.edge >= 0 else "   <- lost"
         print(
-            f"  {result.slot:>5} {result.tool.total:>9.1f} {result.human.total:>9.1f} "
-            f"{result.edge:>+9.1f}{marker}"
+            f"  {result.slot:>5} {result.tool.total:>9.1f} "
+            f"{(result.adp.total if result.adp else 0):>9.1f} "
+            f"{(result.adp_needs.total if result.adp_needs else 0):>9.1f} "
+            f"{result.human.total:>9.1f} "
+            f"{result.edge_over_adp:>+8.1f} {result.edge:>+9.1f}"
+        )
+
+    def stats(values: list[float]) -> tuple[float, float, int]:
+        n = len(values)
+        mean = sum(values) / n
+        variance = sum((v - mean) ** 2 for v in values) / (n - 1) if n > 1 else 0.0
+        return mean, (variance**0.5) / (n**0.5) if n else 0.0, sum(1 for v in values if v > 0)
+
+    print("\n  The comparison that decides whether the modelling earns its keep:")
+    for label, values in (
+        ("vs pure ADP bot     ", [r.edge_over_adp for r in results]),
+        ("vs ADP + roster caps", [r.edge_over_adp_needs for r in results]),
+        ("vs the humans       ", [r.edge for r in results]),
+    ):
+        mean, stderr, wins_here = stats(values)
+        sigma = abs(mean) / stderr if stderr else 0.0
+        print(
+            f"    {label}: {mean:>+8.1f} +/- {stderr:>5.0f}  "
+            f"({wins_here}/{len(values)} slots, {sigma:.1f} SE from zero)"
         )
 
     edges = [r.edge for r in results]

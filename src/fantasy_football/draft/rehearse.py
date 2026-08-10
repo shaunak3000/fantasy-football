@@ -29,7 +29,7 @@ from ..projections.history import season_actuals, training_table
 from ..projections.scoring import ScoringEngine
 from .history import board_with_ids, load_draft
 from .model import fit_pick_model
-from .recommend import recommend
+from .recommend import recommend, roster_limits
 from .state import DraftState
 
 # Starting requirements scored head to head. Kickers and defenses are excluded
@@ -54,10 +54,60 @@ class SlotResult:
     slot: int
     tool: RosterScore
     human: RosterScore
+    adp: RosterScore | None = None
+    adp_needs: RosterScore | None = None
 
     @property
     def edge(self) -> float:
         return self.tool.total - self.human.total
+
+    @property
+    def edge_over_adp(self) -> float:
+        """The number that matters most: is the modelling earning its keep?
+
+        Beating the humans in a single season could be luck either way. Beating
+        a bot that simply takes the highest-ranked player left is a claim about
+        the method, measured against the same opponents in the same draft.
+        """
+        return 0.0 if self.adp is None else self.tool.total - self.adp.total
+
+    @property
+    def edge_over_adp_needs(self) -> float:
+        return 0.0 if self.adp_needs is None else self.tool.total - self.adp_needs.total
+
+
+def best_available_strategy(respect_roster_needs: bool):
+    """A bot that drafts straight off the consensus board.
+
+    Two flavours, because "naive" means two different things. Pure best-available
+    ignores roster construction entirely, which is what a rankings list tells you
+    to do. The needs-aware version refuses to exceed sensible positional caps,
+    which is what an unsophisticated but sane human does. The gap between them
+    measures how much of our value is just "don't draft six receivers".
+    """
+
+    def choose(state, projections, settings, by_id):
+        taken = state.drafted_set
+        available = [p for p in projections if p.espn_id not in taken]
+        if not available:
+            return None
+
+        if respect_roster_needs:
+            limits = roster_limits(settings)
+            counts: dict[str, int] = {}
+            for espn_id in state.my_roster:
+                projection = by_id.get(espn_id)
+                if projection is not None:
+                    counts[projection.position] = counts.get(projection.position, 0) + 1
+            eligible = [
+                p for p in available if counts.get(p.position, 0) < limits.get(p.position, 0)
+            ]
+            if eligible:
+                available = eligible
+
+        return min(available, key=lambda p: p.consensus_overall_rank).espn_id
+
+    return choose
 
 
 def best_lineup(points_by_player: list[tuple[str, str, float]]) -> RosterScore:
@@ -109,6 +159,48 @@ def build_historical_projections(
     return projections, board
 
 
+def replay(
+    slot: int,
+    chooser,
+    projections: list[Projection],
+    settings,
+    actual_picks: list,
+    rounds: int,
+) -> list[int]:
+    """Replay a draft with one slot handed to `chooser`; return that slot's roster."""
+    by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
+
+    # Keyed by pick number, not a queue. A shared queue silently shifts every
+    # opponent forward by one as soon as the board takes somebody, handing them
+    # players who really went earlier and stacking the test against the tool.
+    historical_by_pick = {p.overall_pick: p.espn_id for p in actual_picks}
+    fallback = [p.espn_id for p in actual_picks]
+
+    state = DraftState(team_count=settings.team_count, rounds=rounds, my_slot=slot)
+
+    while not state.is_complete:
+        if state.is_my_turn:
+            chosen = chooser(state, projections, settings, by_id)
+            if chosen is None:
+                break
+            state.record_my_pick(chosen)
+            continue
+
+        wanted = historical_by_pick.get(state.current_pick)
+        if wanted is not None and wanted not in state.drafted_set:
+            state.record(wanted)
+            continue
+
+        # The drafter took the player this opponent wanted, so he settles for the
+        # best player still on the board by his own historical preferences.
+        replacement_pick = next((i for i in fallback if i not in state.drafted_set), None)
+        if replacement_pick is None:
+            break
+        state.record(replacement_pick)
+
+    return list(state.my_roster)
+
+
 def rehearse_slot(
     slot: int,
     season: int,
@@ -120,38 +212,12 @@ def rehearse_slot(
     rounds: int,
     trials: int = 200,
 ) -> SlotResult:
-    """Replay one draft, substituting the board's choices at one slot."""
+    """Replay one draft three ways and score all of them against reality."""
     by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
 
-    # Keyed by pick number, not a queue. A shared queue silently shifts every
-    # opponent forward by one as soon as the board takes somebody, handing them
-    # players who really went earlier and stacking the test against the tool.
-    historical_by_pick = {p.overall_pick: p.espn_id for p in actual_picks}
-    fallback = [p.espn_id for p in actual_picks]
-
-    state = DraftState(team_count=settings.team_count, rounds=rounds, my_slot=slot)
-    human_roster = [p.espn_id for p in actual_picks if p.overall_pick in set(state.my_picks)]
-
-    while not state.is_complete:
-        if state.is_my_turn:
-            options = recommend(state, projections, pick_model, settings, trials=trials)
-            if not options:
-                break
-            state.record_my_pick(options[0].espn_id or -1)
-            continue
-
-        pick_number = state.current_pick
-        wanted = historical_by_pick.get(pick_number)
-        if wanted is not None and wanted not in state.drafted_set:
-            state.record(wanted)
-            continue
-
-        # The board took the player this opponent wanted, so he settles for the
-        # best player still on the board by his own historical preferences.
-        replacement_pick = next((i for i in fallback if i not in state.drafted_set), None)
-        if replacement_pick is None:
-            break
-        state.record(replacement_pick)
+    def board_chooser(state, projs, sets, ids):
+        options = recommend(state, projs, pick_model, sets, trials=trials)
+        return options[0].espn_id if options else None
 
     def score(ids: list[int]) -> RosterScore:
         rows = [
@@ -161,7 +227,36 @@ def rehearse_slot(
         ]
         return best_lineup(rows)
 
-    return SlotResult(slot=slot, tool=score(state.my_roster), human=score(human_roster))
+    picks_for_me = set(
+        DraftState(team_count=settings.team_count, rounds=rounds, my_slot=slot).my_picks
+    )
+    human_roster = [p.espn_id for p in actual_picks if p.overall_pick in picks_for_me]
+
+    return SlotResult(
+        slot=slot,
+        tool=score(replay(slot, board_chooser, projections, settings, actual_picks, rounds)),
+        adp=score(
+            replay(
+                slot,
+                best_available_strategy(False),
+                projections,
+                settings,
+                actual_picks,
+                rounds,
+            )
+        ),
+        adp_needs=score(
+            replay(
+                slot,
+                best_available_strategy(True),
+                projections,
+                settings,
+                actual_picks,
+                rounds,
+            )
+        ),
+        human=score(human_roster),
+    )
 
 
 def rehearse(season: int, creds, rounds: int = 16, trials: int = 200) -> list[SlotResult]:
