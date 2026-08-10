@@ -53,6 +53,7 @@ def roster_limits(settings) -> dict[str, int]:
 class Recommendation:
     player: str
     position: str
+    team: str
     espn_id: int | None
     consensus_rank: int
     vor: float
@@ -61,6 +62,17 @@ class Recommendation:
     survival: float
     value_now: float
     next_pick_value: float
+
+    def rationale(self) -> str:
+        """One line explaining the pick, for reading under a 90-second clock."""
+        scarcity = (
+            f"{self.survival:.0%} chance he lasts to your next pick"
+            if self.survival < 0.9
+            else "safe to wait on, but nobody better is here"
+        )
+        return (
+            f"{self.vor:+.0f} over replacement ({self.mean:.0f} pts, +/-{self.sd:.0f}); {scarcity}."
+        )
 
     @property
     def two_pick_value(self) -> float:
@@ -121,9 +133,31 @@ def recommend(
 
     order_by_value = np.argsort(-vors)[:CANDIDATES_CONSIDERED]
 
-    if gap is None or gap <= 0:
-        # Last pick of the draft: nothing follows, so nobody can be sniped.
+    if gap is None:
+        # Genuinely the last pick of the draft: nothing follows it.
         return [_build(available[i], 1.0, vors[i], 0.0) for i in order_by_value]
+
+    if gap == 0:
+        # Back-to-back picks at the turn of a snake. Nobody picks in between, so
+        # nothing can be sniped and you are really choosing a *pair*: take the
+        # best, then the best of what is left. No simulation is needed because
+        # there is no uncertainty to simulate.
+        results = []
+        for i in order_by_value:
+            counts = dict(my_counts)
+            counts[positions[i]] = counts.get(positions[i], 0) + 1
+            needed = _needed_positions(counts, limits)
+            partner = next(
+                (
+                    float(vors[j])
+                    for j in np.argsort(-vors)
+                    if int(j) != int(i) and positions[int(j)] in needed
+                ),
+                0.0,
+            )
+            results.append(_build(available[i], 1.0, float(vors[i]), partner))
+        results.sort(key=lambda r: -r.two_pick_value)
+        return results
 
     # Scanning for the best survivor only needs to look at players who could
     # plausibly be the answer, but the pool must be wider than the candidate
@@ -202,6 +236,7 @@ def _build(
     return Recommendation(
         player=projection.player,
         position=projection.position,
+        team=projection.team,
         espn_id=projection.espn_id,
         consensus_rank=projection.consensus_rank,
         vor=vor,

@@ -221,10 +221,55 @@ class TestRecommend:
     def test_expected_loss_scales_with_scarcity(self):
         from fantasy_football.draft.recommend import Recommendation
 
-        certain = Recommendation("A", "WR", 1, 1, 80.0, 250.0, 70.0, 0.0, 80.0, 60.0)
-        safe = Recommendation("B", "WR", 2, 2, 80.0, 250.0, 70.0, 1.0, 80.0, 60.0)
-        assert certain.expected_loss_if_passed == 80.0
-        assert safe.expected_loss_if_passed == 0.0
+        def make(survival):
+            return Recommendation(
+                player="A",
+                position="WR",
+                team="CIN",
+                espn_id=1,
+                consensus_rank=1,
+                vor=80.0,
+                mean=250.0,
+                sd=70.0,
+                survival=survival,
+                value_now=80.0,
+                next_pick_value=60.0,
+            )
+
+        assert make(0.0).expected_loss_if_passed == 80.0
+        assert make(1.0).expected_loss_if_passed == 0.0
+
+    def test_rationale_mentions_scarcity_when_a_player_may_vanish(self):
+        from fantasy_football.draft.recommend import Recommendation
+
+        scarce = Recommendation(
+            player="A",
+            position="WR",
+            team="CIN",
+            espn_id=1,
+            consensus_rank=1,
+            vor=80.0,
+            mean=250.0,
+            sd=70.0,
+            survival=0.2,
+            value_now=80.0,
+            next_pick_value=60.0,
+        )
+        assert "20%" in scarce.rationale()
+        safe = Recommendation(
+            player="B",
+            position="WR",
+            team="DAL",
+            espn_id=2,
+            consensus_rank=2,
+            vor=80.0,
+            mean=250.0,
+            sd=70.0,
+            survival=0.97,
+            value_now=80.0,
+            next_pick_value=60.0,
+        )
+        assert "safe to wait" in safe.rationale()
 
     def test_empty_board_is_handled(self, model):
         state = DraftState(team_count=8, rounds=16, my_slot=1)
