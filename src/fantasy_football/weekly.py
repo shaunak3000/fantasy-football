@@ -139,7 +139,11 @@ def main(argv: list[str]) -> int:
 
     bench = [p for p in roster if p not in lineup.players]
     changes = [p for p in lineup.players if not p.started]
-    if changes:
+    if not lineup.players:
+        # An empty roster produces an empty lineup and no changes, which must
+        # not be reported as everything being fine.
+        print("\n  No rostered players to set a lineup from.")
+    elif changes:
         print("\n  CHANGES from your current lineup:")
         for player in changes:
             print(f"    start {player.player} ({player.position})")
