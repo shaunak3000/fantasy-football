@@ -126,6 +126,13 @@ def build(season: int = 2026, refresh: bool = False) -> ProjectionSet:
     # projected from ESPN alone — but a position the league forces you to start
     # must be draftable, and dropping it left the slot permanently unfillable.
     matched = attach_dst_ids(attach_espn_ids(board).matched, league)
+    # FantasyPros calls team defenses "DST"; ESPN's league settings call the slot
+    # "D/ST". Everything downstream keys off the league's own naming, so the
+    # board is normalized here at the boundary rather than special-cased in the
+    # six places that would otherwise have to know about both spellings.
+    matched = matched.with_columns(
+        pl.when(pl.col("pos") == "DST").then(pl.lit("D/ST")).otherwise(pl.col("pos")).alias("pos")
+    )
 
     espn_points = fetch_espn_projections(league)
     replacement = dict(replacement)

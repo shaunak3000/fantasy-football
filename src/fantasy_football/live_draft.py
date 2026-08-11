@@ -21,6 +21,7 @@ from __future__ import annotations
 import sys
 import time
 
+import numpy as np
 from espn_api.football import League
 
 from .config import load_credentials
@@ -167,6 +168,98 @@ def plan() -> int:
     return 0
 
 
+def dryrun() -> int:
+    """Drive a whole draft through the live code path, with no live draft.
+
+    The draft happens once. Anything that only breaks in round 12 — an empty
+    position, a roster cap, a crash on an exhausted board — has to be found
+    now, because there is no second attempt and no time to debug at the time.
+    Opponents pick from the fitted model; the board picks exactly as it would
+    on the night.
+    """
+    bundle = _load_or_complain()
+    if bundle is None:
+        return 1
+
+    creds = load_credentials()
+    league = _league(creds)
+    settings = parse_settings(fetch_raw_settings(league), creds.league_id, SEASON)
+
+    order = draft_order(league)
+    slot = slot_for_team(order, my_team_id(league, creds.swid)) or 1
+
+    projections = bundle.projections.projections
+    state = DraftState(team_count=settings.team_count, rounds=ROUNDS, my_slot=slot)
+
+    rng = np.random.default_rng(0)
+    ranks = np.array([p.consensus_overall_rank for p in projections], dtype=float)
+    board_position = (np.argsort(np.argsort(ranks)) + 1).astype(float)
+    queue = [
+        projections[int(i)]
+        for i in np.argsort(bundle.pick_model.sample_board_order(board_position, ranks, rng))
+    ]
+
+    print(
+        f"Dry run: slot {slot} of {len(order)}, {ROUNDS} rounds, "
+        f"{len(projections)} players on the board.\n"
+    )
+
+    cursor = 0
+    my_picks = []
+    while not state.is_complete:
+        if state.is_my_turn:
+            rows = board_view(state, projections, bundle.pick_model, settings, trials=60)
+            if not rows:
+                print(f"  pick {state.current_pick}: BOARD EXHAUSTED")
+                break
+            choice = next((r for r in rows if r.recommended), rows[0])
+            my_picks.append(choice)
+            print(
+                f"  pick {state.current_pick:>3} (rd {state.round_of(state.current_pick):>2})  "
+                f"{choice.player:<24}{choice.position:<6}"
+                f"rank {choice.overall_rank:>3}  survive {choice.survival:>4.0%}"
+            )
+            state.record_my_pick(choice.espn_id)
+            continue
+
+        while cursor < len(queue) and queue[cursor].espn_id in state.drafted_set:
+            cursor += 1
+        if cursor >= len(queue):
+            print(f"  pick {state.current_pick}: opponents exhausted the board")
+            break
+        state.record(queue[cursor].espn_id)
+        cursor += 1
+
+    counts: dict[str, int] = {}
+    for pick in my_picks:
+        counts[pick.position] = counts.get(pick.position, 0) + 1
+
+    print(f"\n  Roster: {counts}")
+    limits = roster_limits(settings)
+    problems = [
+        f"{position} {count} exceeds cap {limits[position]}"
+        for position, count in counts.items()
+        if position in limits and count > limits[position]
+    ]
+    missing = [
+        position
+        for position in settings.starting_slots
+        if position not in ("RB/WR/TE",) and counts.get(position, 0) == 0
+    ]
+    if missing:
+        problems.append(f"no player at required position(s): {', '.join(missing)}")
+
+    if problems:
+        print("\n  PROBLEMS:")
+        for problem in problems:
+            print(f"    {problem}")
+        return 1
+
+    print(f"  {len(my_picks)} picks made, all caps respected, every slot fillable.")
+    print("  Dry run passed.")
+    return 0
+
+
 def watch() -> int:
     bundle = _load_or_complain()
     if bundle is None:
@@ -273,6 +366,8 @@ def main(argv: list[str]) -> int:
         return prepare()
     if command == "plan":
         return plan()
+    if command == "dryrun":
+        return dryrun()
     if command == "watch":
         return watch()
     if command == "manual":

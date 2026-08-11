@@ -68,6 +68,10 @@ class DraftState:
         upcoming = [p for p in self.my_picks if p > reference]
         return upcoming[0] if upcoming else None
 
+    def my_picks_remaining(self) -> int:
+        """How many selections I still have, including the one on the clock."""
+        return len([pick for pick in self.my_picks if pick >= self.current_pick])
+
     def picks_until_my_next(self) -> int | None:
         """How many players come off the board before I choose again."""
         following = self.next_pick_for_me()

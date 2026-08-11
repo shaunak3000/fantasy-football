@@ -31,6 +31,10 @@ DEFAULT_ROLLOUT_CANDIDATES = 10
 # A gap this large between consecutive players at a position marks a tier break.
 TIER_GAP_POINTS = 12.0
 
+# Shared slots are filled by other positions, so they are never "unfilled" in
+# the sense that matters for reserving late picks.
+FLEX_SLOT_NAMES = ("RB/WR", "RB/WR/TE", "WR/TE", "OP")
+
 
 def _counts(roster_ids, by_id) -> dict[str, int]:
     counts: dict[str, int] = {}
@@ -70,8 +74,25 @@ def best_available_at_need(state, projections, settings, by_id):
         return None
 
     limits = roster_limits(settings)
-    needed = _needed(_counts(state.my_roster, by_id), limits)
+    counts = _counts(state.my_roster, by_id)
+    needed = _needed(counts, limits)
     eligible = [p for p in available if p.position in needed] or available
+
+    # Some positions you are simply obliged to field. They are also the least
+    # valuable, so on pure value they lose every single round and never get
+    # taken at all — the caps sum to more slots than the draft has rounds, and
+    # the kicker and defense are always next in line when the picks run out.
+    # Once the remaining picks only just cover the positions still unfilled,
+    # stop optimizing and fill them.
+    mandatory = [
+        position
+        for position, count in settings.starting_slots.items()
+        if count > 0 and position not in FLEX_SLOT_NAMES and counts.get(position, 0) == 0
+    ]
+    if mandatory and state.my_picks_remaining() <= len(mandatory):
+        forced = [p for p in available if p.position in mandatory]
+        if forced:
+            return max(forced, key=lambda p: p.vor).espn_id
 
     best_on_the_board = max(eligible, key=lambda p: p.vor)
     if best_on_the_board.vor > LOTTERY_VOR:

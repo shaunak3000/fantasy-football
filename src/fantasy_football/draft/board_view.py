@@ -21,6 +21,7 @@ import numpy as np
 from ..projections.ensemble import Projection
 from .recommend import roster_limits
 from .state import DraftState
+from .strategies import best_available_at_need
 
 SURVIVAL_TRIALS = 300
 
@@ -164,7 +165,23 @@ def board_view(
     )
     eligible.sort(key=lambda pair: pair[1].consensus_overall_rank)
 
-    chosen_index = eligible[0][0]
+    # The recommendation comes from the strategy itself rather than being
+    # reimplemented here. They diverged once — the live board kept taking the
+    # highest-ranked player while the strategy had learned to reserve late picks
+    # for mandatory positions — and a draft board that disagrees with the
+    # strategy it was validated as is worse than either alone.
+    chosen_id = best_available_at_need(state, projections, settings, by_id)
+    chosen_index = next(
+        (i for i, p in enumerate(available) if p.espn_id == chosen_id),
+        eligible[0][0],
+    )
+
+    # The recommendation must always appear in the rows returned, and it is not
+    # always near the top of them: late in the draft the right pick is a kicker
+    # ranked 178th, which the display would otherwise truncate away — leaving
+    # nothing flagged and any caller falling back to the wrong player.
+    eligible = [pair for pair in eligible if pair[0] != chosen_index]
+    eligible.insert(0, (chosen_index, available[chosen_index]))
     rows = [
         BoardRow(
             player=p.player,
