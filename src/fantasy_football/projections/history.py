@@ -171,7 +171,75 @@ def training_table(
             )
         )
 
+    dst = _dst_training(seasons, engine, refresh=refresh)
+    if not dst.is_empty():
+        frames.append(dst)
+
     if not frames:
         return pl.DataFrame(), coverage
 
     return pl.concat(frames, how="vertical"), coverage
+
+
+def _dst_training(seasons: list[int], engine, refresh: bool = False) -> pl.DataFrame:
+    """Preseason rank and realized points for team defenses.
+
+    Defenses join on team rather than on a player identity, because there is
+    exactly one per team and they have no entry in any player table. Everything
+    else about them is treated identically to a skill position, which is the
+    point: once they have real history they stop being a special case.
+    """
+    from ..data.dst import score_dst_seasons
+    from ..data.ids import normalize_team
+
+    actuals = score_dst_seasons(seasons, engine)
+    if actuals.is_empty():
+        return pl.DataFrame()
+
+    lookup = {
+        (row["season"], normalize_team(row["team"])): row for row in actuals.iter_rows(named=True)
+    }
+
+    rows = []
+    for season in seasons:
+        board = _preseason_snapshot(load_rankings_history(refresh=refresh), season)
+        if board.is_empty():
+            continue
+        defenses = (
+            board.filter(pl.col("pos") == "DST")
+            .sort("ecr")
+            .with_columns(pl.col("ecr").rank("ordinal").cast(pl.Int32).alias("pos_rank"))
+        )
+        for row in defenses.iter_rows(named=True):
+            actual = lookup.get((season, normalize_team(row.get("team"))))
+            if actual is None:
+                continue
+            games = int(actual["games_played"] or 0)
+            rows.append(
+                {
+                    "season": season,
+                    "player": row["player"],
+                    "pos": "D/ST",
+                    "team": row.get("team"),
+                    "ecr": row["ecr"],
+                    "sd": row.get("sd"),
+                    "best": row.get("best"),
+                    "worst": row.get("worst"),
+                    "pos_rank": int(row["pos_rank"]),
+                    "actual_points": float(actual["actual_points"] or 0.0),
+                    "games_played": games,
+                    "weekly_sd": float(actual["weekly_sd"] or 0.0),
+                    "points_per_game": (float(actual["actual_points"]) / games if games else None),
+                }
+            )
+
+    if not rows:
+        return pl.DataFrame()
+
+    # Match the skill-position frame's dtypes exactly, or the concat fails on a
+    # silent Int64/Int32 mismatch in `season`.
+    return pl.DataFrame(rows).with_columns(
+        pl.col("season").cast(pl.Int32),
+        pl.col("games_played").cast(pl.UInt32),
+        pl.col("pos_rank").cast(pl.Int32),
+    )

@@ -84,8 +84,11 @@ def optimize(candidates: list, settings, risk: float = 0.0) -> Lineup:
         return Lineup()
 
     problem = pulp.LpProblem("lineup", pulp.LpMaximize)
+    # `problem.add_variable` is the PuLP 4 construction path; building an
+    # LpVariable directly is deprecated. The solver is a separate question —
+    # see the note at the bottom of this module.
     assign = {
-        (i, j): pulp.LpVariable(f"x_{i}_{j}", cat="Binary")
+        (i, j): problem.add_variable(f"x_{i}_{j}", cat="Binary")
         for i, player in enumerate(startable)
         for j, slot in enumerate(slots)
         if player.position in slot.eligible
@@ -108,6 +111,11 @@ def optimize(candidates: list, settings, risk: float = 0.0) -> Lineup:
         if of_player:
             problem += pulp.lpSum(of_player) <= 1
 
+    # PuLP 4 prefers COIN_CMD over PULP_CBC_CMD, but COIN_CMD needs a separately
+    # installed CBC binary that is not present here — `listSolvers` reports
+    # PULP_CBC_CMD as the only one available. Pulling in a new solver binary is
+    # not a change worth making days before a draft, so this stays and is
+    # revisited when PuLP 4 actually lands.
     problem.solve(pulp.PULP_CBC_CMD(msg=False))
 
     lineup = Lineup()
