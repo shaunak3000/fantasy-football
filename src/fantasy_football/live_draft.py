@@ -33,7 +33,7 @@ from .draft.live import DraftFeed, draft_order, my_team_id, slot_for_team, sync_
 from .draft.model import fit_pick_model
 from .draft.recommend import roster_limits
 from .draft.script import DEFAULT_TRIALS, forecast, target_survival
-from .draft.state import DraftState
+from .draft.state import DraftState, snake_slot_for_pick
 from .projections.build import build
 
 SEASON = 2026
@@ -165,6 +165,81 @@ def plan() -> int:
     print("\n  'most likely' is the single most frequent outcome across simulations;")
     print("  the position mix shows what the pick usually turns into. Treat this as")
     print("  the shape of your draft, not a script to follow blindly.")
+    return 0
+
+
+def simulate() -> int:
+    """Play one plausible draft out in full, every team, every pick.
+
+    The per-pick plan shows what you end up with; this shows the room. Seeing
+    the snake actually turn — who is picking while you wait, how far a run
+    travels before it reaches you — is what makes the fourteen-pick gap between
+    your pairs concrete rather than a number.
+    """
+    bundle = _load_or_complain()
+    if bundle is None:
+        return 1
+
+    creds = load_credentials()
+    league = _league(creds)
+    settings = parse_settings(fetch_raw_settings(league), creds.league_id, SEASON)
+
+    order = draft_order(league)
+    slot = slot_for_team(order, my_team_id(league, creds.swid)) or 1
+    names = {t.team_id: t.team_name for t in league.teams}
+    slot_names = {i + 1: names.get(tid, f"slot {i + 1}") for i, tid in enumerate(order)}
+
+    projections = bundle.projections.projections
+    by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
+    state = DraftState(team_count=settings.team_count, rounds=ROUNDS, my_slot=slot)
+
+    rng = np.random.default_rng(0)
+    ranks = np.array([p.consensus_overall_rank for p in projections], dtype=float)
+    board_position = (np.argsort(np.argsort(ranks)) + 1).astype(float)
+    queue = [
+        projections[int(i)]
+        for i in np.argsort(bundle.pick_model.sample_board_order(board_position, ranks, rng))
+    ]
+
+    print(f"One simulated draft. You are slot {slot} ({slot_names.get(slot)}).\n")
+
+    cursor = 0
+    current_round = 0
+    while not state.is_complete:
+        pick_number = state.current_pick
+        pick_round = state.round_of(pick_number)
+        if pick_round != current_round:
+            current_round = pick_round
+            direction = "-->" if pick_round % 2 else "<--"
+            print(f"\n  ---- Round {pick_round} {direction} ----")
+
+        picking_slot = snake_slot_for_pick(pick_number, settings.team_count)
+        mine = picking_slot == slot
+
+        if mine:
+            rows = board_view(state, projections, bundle.pick_model, settings, trials=40)
+            if not rows:
+                break
+            choice = next((r for r in rows if r.recommended), rows[0])
+            player = by_id[choice.espn_id]
+            state.record_my_pick(choice.espn_id)
+        else:
+            while cursor < len(queue) and queue[cursor].espn_id in state.drafted_set:
+                cursor += 1
+            if cursor >= len(queue):
+                break
+            player = queue[cursor]
+            state.record(player.espn_id)
+            cursor += 1
+
+        marker = "  <<< YOU" if mine else ""
+        print(
+            f"  {pick_number:>3}  {slot_names.get(picking_slot, picking_slot)[:20]:<20} "
+            f"{player.player:<24}{player.position:<6}{marker}"
+        )
+
+    print("\n  Your picks are the marked rows. Note how the order reverses each")
+    print("  round: at the turn you pick twice in a row, then wait the longest.")
     return 0
 
 
@@ -368,6 +443,8 @@ def main(argv: list[str]) -> int:
         return plan()
     if command == "dryrun":
         return dryrun()
+    if command == "simulate":
+        return simulate()
     if command == "watch":
         return watch()
     if command == "manual":
