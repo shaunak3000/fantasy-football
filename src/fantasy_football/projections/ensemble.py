@@ -30,6 +30,10 @@ DEFAULT_CONSENSUS_WEIGHT = 0.65
 # they agree on. This scales the historical spread up when they disagree.
 DISAGREEMENT_SPREAD_FACTOR = 0.35
 
+# Spread assumed for a position with no historical fit. Deliberately wide: not
+# knowing a distribution is a reason to claim less confidence, not more.
+UNFITTED_SPREAD_FRACTION = 0.45
+
 
 @dataclass(frozen=True)
 class Projection:
@@ -107,7 +111,34 @@ def build_projections(
     for row in ranked.iter_rows(named=True):
         position = row["pos"]
         curve = curves.get(position)
+
         if curve is None:
+            # Team defenses have no historical curve: their scoring inputs are
+            # team-level and live in a feed the stat mapper does not cover, so
+            # there are no actuals to fit. Rather than drop the position and
+            # leave a roster slot permanently unfillable, fall back to ESPN's own
+            # projection. This is deliberately less trustworthy than the fitted
+            # positions — and it matters least, since D/ST is the smallest edge
+            # on the board and is streamed all season anyway.
+            fallback = espn_points.get(row.get("espn_id"))
+            if fallback is None:
+                continue
+            replacement_level = replacement.get(position, 0.0)
+            projections.append(
+                Projection(
+                    player=row["player"],
+                    position=position,
+                    team=row["team"],
+                    espn_id=row.get("espn_id"),
+                    consensus_rank=int(row["ecr_pos_rank"]),
+                    consensus_overall_rank=int(row["ecr_overall_rank"]),
+                    espn_rank=None,
+                    blended_rank=float(row["ecr_pos_rank"]),
+                    mean=float(fallback),
+                    sd=float(fallback) * UNFITTED_SPREAD_FRACTION,
+                    replacement=replacement_level,
+                )
+            )
             continue
 
         consensus_rank = int(row["ecr_pos_rank"])

@@ -45,8 +45,25 @@ def _needed(counts, limits) -> set[str]:
     return {p for p, cap in limits.items() if counts.get(p, 0) < cap}
 
 
+# Below this value over replacement a pick cannot improve your starting lineup
+# in expectation, so its only worth is the chance it becomes something.
+LOTTERY_VOR = 0.0
+# How much weight upside carries once a pick is a lottery ticket.
+CEILING_WEIGHT = 1.0
+
+
 def best_available_at_need(state, projections, settings, by_id):
-    """Highest-ranked player at a position still open. The baseline to beat."""
+    """Highest-ranked player at a position still open. The baseline to beat.
+
+    With one refinement at the end of the draft. Past roughly round nine every
+    remaining player is below replacement level, meaning none of them improves
+    the lineup you expect to start — the model genuinely cannot separate them on
+    expected points. What it *can* separate them on is spread, which among those
+    picks ranges more than threefold. When the expected value of a pick is zero
+    either way, the right tiebreak is ceiling, not median: a stashed player only
+    ever helps by becoming something, and a safe replacement-level bench player
+    never becomes anything.
+    """
     taken = state.drafted_set
     available = [p for p in projections if p.espn_id not in taken]
     if not available:
@@ -55,7 +72,13 @@ def best_available_at_need(state, projections, settings, by_id):
     limits = roster_limits(settings)
     needed = _needed(_counts(state.my_roster, by_id), limits)
     eligible = [p for p in available if p.position in needed] or available
-    return min(eligible, key=lambda p: p.consensus_overall_rank).espn_id
+
+    best_on_the_board = max(eligible, key=lambda p: p.vor)
+    if best_on_the_board.vor > LOTTERY_VOR:
+        return min(eligible, key=lambda p: p.consensus_overall_rank).espn_id
+
+    # Everything left is a lottery ticket; take the one with the highest ceiling.
+    return max(eligible, key=lambda p: p.mean + CEILING_WEIGHT * p.sd).espn_id
 
 
 def best_vor_at_need(state, projections, settings, by_id):
