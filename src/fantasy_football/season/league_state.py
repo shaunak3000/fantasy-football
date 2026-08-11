@@ -62,13 +62,32 @@ class LeagueState:
 POSITION_BY_ID = {0: "QB", 2: "RB", 4: "WR", 6: "TE", 16: "D/ST", 17: "K"}
 
 
+# Games a healthy player is available for, used to convert a season projection
+# into a per-week one when no fitted weekly curve exists.
+TYPICAL_GAMES_PLAYED = 16.0
+# Weekly volatility relative to production for positions with no fitted spread.
+UNFITTED_WEEKLY_CV = 0.55
+
+
 def _weekly_estimate(projection, model: WeeklyModel) -> tuple[float, float]:
-    """Per-game mean and spread for a player, from the rank curves."""
+    """Per-game mean and spread for a player.
+
+    Uses the fitted per-game curves where they exist. Positions without one —
+    team defenses, whose scoring inputs were never mapped — fall back to their
+    season projection divided across a season. Without that fallback every
+    defense is worth zero every week, so the optimizer cannot tell them apart
+    and quietly understates the lineup it recommends.
+    """
+    rank = getattr(projection, "blended_rank", getattr(projection, "consensus_rank", 50))
     per_game = model.per_game.get(projection.position)
     spread = model.spread.get(projection.position)
-    rank = getattr(projection, "blended_rank", getattr(projection, "consensus_rank", 50))
-    mean = per_game.points_at(rank) if per_game else 0.0
-    sd = spread.points_at(rank) if spread else max(mean * 0.5, 1.0)
+
+    if per_game is None:
+        mean = float(getattr(projection, "mean", 0.0)) / TYPICAL_GAMES_PLAYED
+        return mean, max(mean * UNFITTED_WEEKLY_CV, 1.0)
+
+    mean = per_game.points_at(rank)
+    sd = spread.points_at(rank) if spread else max(mean * UNFITTED_WEEKLY_CV, 1.0)
     return mean, sd
 
 

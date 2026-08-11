@@ -53,10 +53,15 @@ def _team_seasons(state) -> list[TeamSeason]:
 
 def main(argv: list[str]) -> int:
     week = int(argv[0]) if argv else None
+    # A past season can be replayed to exercise this end to end against real
+    # rosters, schedules and standings, rather than waiting for a season to
+    # start. Bye weeks come from the current consensus board, so they are only
+    # meaningful for the live season — a replay is a smoke test, not a backtest.
+    season = int(argv[1]) if len(argv) > 1 else SEASON
 
     creds = load_credentials()
-    league = League(league_id=creds.league_id, year=SEASON, espn_s2=creds.espn_s2, swid=creds.swid)
-    settings = parse_settings(fetch_raw_settings(league), creds.league_id, SEASON)
+    league = League(league_id=creds.league_id, year=season, espn_s2=creds.espn_s2, swid=creds.swid)
+    settings = parse_settings(fetch_raw_settings(league), creds.league_id, season)
     engine = ScoringEngine.from_settings(settings)
     week = week or max(getattr(league, "nfl_week", 1), 1)
 
@@ -73,7 +78,7 @@ def main(argv: list[str]) -> int:
         bundle.projections.projections,
         weekly_model,
         current_week=week,
-        byes=bye_weeks_by_espn_id(),
+        byes=bye_weeks_by_espn_id() if season == SEASON else {},
     )
 
     my_id = my_team_id(league, creds.swid)
@@ -84,7 +89,7 @@ def main(argv: list[str]) -> int:
         print("Could not identify your team.", file=sys.stderr)
         return 1
 
-    print(f"\n# {settings.name} — week {week}\n")
+    print(f"\n# {settings.name} {season} — week {week}\n")
 
     teams = _team_seasons(state)
     outcome = simulate(teams, state.schedule, settings.playoff_team_count, trials=SIM_TRIALS)
