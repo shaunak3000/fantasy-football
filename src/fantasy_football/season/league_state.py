@@ -11,8 +11,19 @@ from dataclasses import dataclass, field
 
 from espn_api.football import League
 
-from ..draft.board_view import BoardRow  # noqa: F401  (re-exported for callers)
+from ..data.ids import attach_espn_ids
+from ..data.nflverse import load_consensus_board
 from ..projections.weekly import WeeklyModel
+
+
+def bye_weeks_by_espn_id() -> dict[int, int]:
+    """Bye week per ESPN player id, taken from the consensus board."""
+    matched = attach_espn_ids(load_consensus_board()).matched
+    return {
+        int(row["espn_id"]): int(row["bye"])
+        for row in matched.iter_rows(named=True)
+        if row.get("espn_id") is not None and row.get("bye") is not None
+    }
 
 
 @dataclass
@@ -25,6 +36,8 @@ class RosterPlayer:
     mean: float
     sd: float
     slot_id: int = -1
+    bye_week: int | None = None
+    on_bye: bool = False
 
     @property
     def started(self) -> bool:
@@ -66,17 +79,36 @@ def build_state(
     weekly_model: WeeklyModel,
     current_week: int,
     free_agent_pool: int = 60,
+    byes: dict[int, int] | None = None,
 ) -> LeagueState:
     """Assemble rosters, remaining schedule, and standings from the live league."""
     by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
+    byes = byes or {}
 
     def to_roster_player(espn_id, name, position, slot_id=-1) -> RosterPlayer | None:
         projection = by_id.get(espn_id)
         if projection is None:
             return None
         mean, sd = _weekly_estimate(projection, weekly_model)
+
+        # A player on bye scores exactly zero, so he must be worth zero to the
+        # optimizer. Without this the solver cheerfully starts him — the single
+        # most damaging routine mistake there is, and one no amount of
+        # projection accuracy elsewhere can make up for.
+        bye_week = byes.get(espn_id)
+        on_bye = bye_week is not None and bye_week == current_week
+        if on_bye:
+            mean, sd = 0.0, 0.0
+
         return RosterPlayer(
-            player=name, position=position, espn_id=espn_id, mean=mean, sd=sd, slot_id=slot_id
+            player=name,
+            position=position,
+            espn_id=espn_id,
+            mean=mean,
+            sd=sd,
+            slot_id=slot_id,
+            bye_week=bye_week,
+            on_bye=on_bye,
         )
 
     state = LeagueState(settings=settings, current_week=current_week)

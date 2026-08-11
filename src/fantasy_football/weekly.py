@@ -23,7 +23,7 @@ from .lineup.optimizer import best_lineup_against, optimize
 from .projections.history import training_table
 from .projections.scoring import ScoringEngine
 from .projections.weekly import WeeklyModel
-from .season.league_state import build_state
+from .season.league_state import build_state, bye_weeks_by_espn_id
 from .season.simulator import TeamSeason, simulate
 from .transactions.evaluate import find_trades, rank_waiver_targets
 
@@ -68,7 +68,12 @@ def main(argv: list[str]) -> int:
     training, _ = training_table(TRAIN_SEASONS, engine)
     weekly_model = WeeklyModel.fit(training)
     state = build_state(
-        league, settings, bundle.projections.projections, weekly_model, current_week=week
+        league,
+        settings,
+        bundle.projections.projections,
+        weekly_model,
+        current_week=week,
+        byes=bye_weeks_by_espn_id(),
     )
 
     my_id = my_team_id(league, creds.swid)
@@ -105,6 +110,32 @@ def main(argv: list[str]) -> int:
     for slot, players in lineup.starters.items():
         for player in players:
             print(f"  {slot:<10} {player.player:<24} {player.mean:>6.1f} +/-{player.sd:>5.1f}")
+
+    # The solver leaves a slot empty rather than starting someone worth zero, so
+    # an absent slot is a real signal: nobody on the roster can fill it.
+    unfilled = [
+        slot
+        for slot in settings.starting_slots
+        if not lineup.starters.get(slot)
+        and settings.starting_slots[slot] > len(lineup.starters.get(slot, []))
+    ]
+    if unfilled:
+        print(f"\n  NOBODY TO START at: {', '.join(unfilled)} — make a claim")
+
+    on_bye = [p for p in roster if p.on_bye]
+    if on_bye:
+        print(f"\n  ON BYE this week (worth 0): {', '.join(p.player for p in on_bye)}")
+
+    # A bye collision two weeks out is fixable now and unfixable then, so the
+    # report looks ahead rather than only at the week in front of you.
+    upcoming: dict[int, list[str]] = {}
+    for player in roster:
+        if player.bye_week and week < player.bye_week <= week + 3:
+            upcoming.setdefault(player.bye_week, []).append(f"{player.player} ({player.position})")
+    for bye_week in sorted(upcoming):
+        names_hit = upcoming[bye_week]
+        warning = "  <- thin, plan a claim" if len(names_hit) >= 3 else ""
+        print(f"  Week {bye_week} byes: {', '.join(names_hit)}{warning}")
 
     bench = [p for p in roster if p not in lineup.players]
     changes = [p for p in lineup.players if not p.started]
