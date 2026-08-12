@@ -41,6 +41,9 @@ ROUNDS = 16
 DRAFT_SEASONS = [2024, 2025]
 POLL_SECONDS = 3.0
 LIVE_TRIALS = 250
+# Consecutive failed polls before the board is declared untrustworthy. A few
+# seconds of transient error is normal; half a minute of it is not.
+FEED_FAILURE_LIMIT = 10
 
 
 def _league(creds, season=SEASON) -> League:
@@ -361,11 +364,28 @@ def watch() -> int:
 
     print("Watching for picks. Draft in ESPN as normal; Ctrl-C to stop.\n")
     last_shown = -1
+    consecutive_errors = 0
     try:
         while True:
             feed.poll()
             if feed.last_error:
-                print(f"  (feed error: {feed.last_error} - retrying)")
+                consecutive_errors += 1
+                print(f"  (feed error #{consecutive_errors}: {feed.last_error} - retrying)")
+                # A couple of dropped polls are normal. A sustained run of them
+                # means the feed is not coming back on its own — usually expired
+                # cookies — and silently showing a frozen board during a draft
+                # is the worst possible failure. Say so, loudly, with the way out.
+                if consecutive_errors == FEED_FAILURE_LIMIT:
+                    print("\n" + "!" * 72)
+                    print("  FEED HAS FAILED REPEATEDLY. The board below is STALE.")
+                    print("  Most likely your ESPN cookies expired mid-draft.")
+                    print("  Fix: refresh espn_s2 + SWID in .env, then restart this command —")
+                    print("       it rebuilds from scratch and loses nothing.")
+                    print("  Or:  run 'live_draft manual' — it recovers the picks so far")
+                    print("       from ESPN and lets you continue by typing.")
+                    print("!" * 72 + "\n")
+            else:
+                consecutive_errors = 0
 
             sync_state(state, feed, team_id)
             if feed.complete:
@@ -392,10 +412,30 @@ def manual() -> int:
     league = _league(creds)
     settings = parse_settings(fetch_raw_settings(league), creds.league_id, SEASON)
 
-    raw_slot = input(f"Your draft slot (1-{settings.team_count}): ").strip()
-    slot = int(raw_slot) if raw_slot.isdigit() else 1
+    # Seed from the live feed if it is reachable at all. Manual mode exists for
+    # when `watch` has failed, and a draft that has failed at pick 60 must not
+    # require retyping sixty picks against a running clock — take whatever ESPN
+    # will still give, then carry on by hand from there.
+    order = draft_order(league)
+    detected = slot_for_team(order, my_team_id(league, creds.swid))
 
-    state = DraftState(team_count=settings.team_count, rounds=ROUNDS, my_slot=slot)
+    state = DraftState(team_count=settings.team_count, rounds=ROUNDS, my_slot=detected or 1)
+    seed_feed = DraftFeed(league=league)
+    if seed_feed.poll() or seed_feed.picks:
+        sync_state(state, seed_feed, my_team_id(league, creds.swid))
+        print(
+            f"Recovered {len(seed_feed.picks)} picks from ESPN; resuming at "
+            f"pick {state.current_pick}."
+        )
+    else:
+        print(f"No live feed ({seed_feed.last_error or 'nothing drafted yet'}); starting fresh.")
+
+    if detected is None:
+        raw_slot = input(f"Your draft slot (1-{settings.team_count}): ").strip()
+        state.my_slot = int(raw_slot) if raw_slot.isdigit() else 1
+    else:
+        print(f"Draft slot {detected} of {len(order)}.")
+
     projections = bundle.projections.projections
     by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
     by_name = {p.player.lower(): p for p in projections}
