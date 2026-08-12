@@ -121,7 +121,12 @@ def build(season: int = 2026, refresh: bool = False) -> ProjectionSet:
     replacement = replacement_points(settings, curves)
     ranks = replacement_ranks(settings, curves)
 
-    board = load_consensus_board(refresh=refresh)
+    # Always refetched, never read from cache. Consensus rankings move daily in
+    # August — injuries, depth charts, holdouts — and a board cached a week ago
+    # is exactly the failure that "re-run this the morning of the draft" is
+    # meant to prevent. The historical training data below is genuinely static
+    # and stays cached.
+    board = load_consensus_board(refresh=True)
     # Team defenses stay on the board. They have no fitted curve, so they are
     # projected from ESPN alone — but a position the league forces you to start
     # must be draftable, and dropping it left the slot permanently unfillable.

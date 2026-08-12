@@ -26,6 +26,7 @@ from espn_api.football import League
 
 from .config import load_credentials
 from .data.espn import fetch_raw_settings, parse_settings
+from .data.nflverse import load_consensus_board
 from .draft.board_view import board_view
 from .draft.cache import load_bundle, save_bundle
 from .draft.history import pick_training
@@ -55,7 +56,10 @@ def prepare() -> int:
     print("Fitting projections and draft behaviour - this takes a minute.\n")
 
     projections = build(SEASON)
+    board = load_consensus_board()
+    scraped = board["scrape_date"][0] if board.height else "unknown"
     print(f"  projections: {len(projections.projections)} players")
+    print(f"  rankings:    consensus board scraped {scraped}")
 
     training, sizes = pick_training(DRAFT_SEASONS, creds)
     model = fit_pick_model(training)
