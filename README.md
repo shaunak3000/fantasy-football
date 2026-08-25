@@ -20,7 +20,8 @@ cp .env.example .env          # league id + two ESPN cookies; see below
 
 # Draft
 uv run python -m fantasy_football.live_draft prepare   # the morning of
-uv run python -m fantasy_football.live_draft plan      # forward plan for all 16 picks
+uv run python -m fantasy_football.live_draft plan      # shape of every possible slot
+uv run python -m fantasy_football.live_draft plan 5    # detail once your slot is drawn
 uv run python -m fantasy_football.live_draft watch     # during: draft in ESPN, this advises
 uv run python -m fantasy_football.live_draft manual    # fallback if the feed dies
 

@@ -135,8 +135,14 @@ def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> 
     print("=" * 72)
 
 
-def plan() -> int:
-    """Forward plan for the whole draft, produced before it starts."""
+def plan(argv: list[str] | None = None) -> int:
+    """Forward plan for the whole draft, produced before it starts.
+
+    Takes an optional slot number. This league randomizes the draft order an
+    hour before kickoff, so the slot read from `pickOrder` beforehand is not the
+    one you will draft from — plan for a specific slot only after the room opens,
+    and use the all-slots table before that.
+    """
     bundle = _load_or_complain()
     if bundle is None:
         return 1
@@ -146,11 +152,22 @@ def plan() -> int:
     settings = parse_settings(fetch_raw_settings(league), creds.league_id, SEASON)
 
     order = draft_order(league)
-    team_id = my_team_id(league, creds.swid)
-    slot = slot_for_team(order, team_id) or 1
-
     projections = bundle.projections.projections
-    print(f"Draft slot {slot} of {len(order)}. Simulating {DEFAULT_TRIALS} drafts...\n")
+
+    requested = int(argv[0]) if argv and argv[0].isdigit() else None
+    if requested is None:
+        print("Draft order is randomized an hour before kickoff, so no slot is")
+        print("fixed yet. Here is the shape of every possible draw:\n")
+        _all_slots_summary(projections, bundle.pick_model, settings, len(order))
+        print("\nOnce the room opens and the order is set, re-run with your slot:")
+        print("    live_draft plan <slot>")
+        slot = slot_for_team(order, my_team_id(league, creds.swid)) or 1
+        print(f"\nBelow is provisional detail for slot {slot}, from the CURRENT")
+        print("pre-shuffle order. Treat it as illustrative, not as your plan.")
+    else:
+        slot = requested
+
+    print(f"\nDraft slot {slot} of {len(order)}. Simulating {DEFAULT_TRIALS} drafts...\n")
 
     print("Who is still on the board at your first pick:")
     print(f"  {'player':<24}{'pos':<5}{'rank':>5}{'available':>11}")
@@ -173,6 +190,23 @@ def plan() -> int:
     print("  the position mix shows what the pick usually turns into. Treat this as")
     print("  the shape of your draft, not a script to follow blindly.")
     return 0
+
+
+def _all_slots_summary(projections, pick_model, settings, team_count: int) -> None:
+    """First picks, longest wait, and a realistic target for every slot."""
+    print(f"  {'slot':>5}  {'first four picks':<24}{'longest wait':>13}{'likely at #1':>22}")
+    for slot in range(1, team_count + 1):
+        state = DraftState(team_count=team_count, rounds=ROUNDS, my_slot=slot)
+        picks = state.my_picks
+        gaps = [b - a for a, b in zip(picks, picks[1:], strict=False)]
+        survivors = target_survival(
+            slot, projections, pick_model, settings, rounds=ROUNDS, trials=120, top=14
+        )
+        likely = next((name for name, _, _, odds in survivors if odds >= 0.5), "-")
+        print(f"  {slot:>5}  {str(picks[:4]):<24}{max(gaps) if gaps else 0:>13}{likely[:21]:>22}")
+    print("\n  The rule you follow does not change with the slot - only how long you")
+    print("  wait between turns. Early slots pick once then wait; the last slot picks")
+    print("  twice back to back then waits longest.")
 
 
 def simulate() -> int:
@@ -484,7 +518,7 @@ def main(argv: list[str]) -> int:
     if command == "prepare":
         return prepare()
     if command == "plan":
-        return plan()
+        return plan(argv[1:])
     if command == "dryrun":
         return dryrun()
     if command == "simulate":

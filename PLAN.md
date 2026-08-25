@@ -21,7 +21,7 @@ Three properties of this format drive the modeling and are easy to get wrong:
 2. **Half the league makes the playoffs, and matchups are one week long.** P(first) ≈ P(top 4) × P(win semi) × P(win final), where qualifying is the cheap term and the title comes down to two single-game outcomes. Seeding is worth little beyond making it. So the regular season is played for **floor** — just qualify — and weeks 14–15 are played for **ceiling**. Season-long expected points is the wrong objective in this format, which is the whole reason the P(first) simulator is the spine rather than a nice extra.
 3. **Waiver priority, not FAAB.** The transactions problem is sequential — when to spend a priority position — not a budget allocation.
 
-**Draft: Friday 4 September 2026, 8:30 PM ET** (room opens 7:30 PM ET). 90 seconds per pick, 16 rounds, snake, slot 8 of 8 — so picks come in back-to-back pairs separated by fourteen selections. Trade deadline 2 December.
+**Draft: Friday 4 September 2026, 8:30 PM ET** (room opens 7:30 PM ET). 90 seconds per pick, 16 rounds, snake. **The draft slot is randomized one hour before kickoff**, so nothing slot-dependent can be settled in advance — `plan` prints the shape of all eight draws, and takes a slot argument once the real one is known. Trade deadline 2 December.
 
 ## Scope
 
