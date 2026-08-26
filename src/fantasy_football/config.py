@@ -12,10 +12,32 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
 CACHE_DIR = DATA_DIR / "cache"
 
+# Credentials live outside the repo, in Dropbox, so the same file serves both
+# machines and cannot be committed by accident. Searched in order; the first
+# file found wins, so a project-local .env still overrides for a one-off.
+ENV_PATH_VAR = "FANTASY_FOOTBALL_ENV"
+DROPBOX_SECRET = Path.home() / "Dropbox" / "secrets" / "fantasy-football.env"
+
+
+def env_candidates() -> list[Path]:
+    override = os.environ.get(ENV_PATH_VAR)
+    paths = [Path(override)] if override else []
+    paths.extend([REPO_ROOT / ".env", DROPBOX_SECRET])
+    return paths
+
+
+def env_file() -> Path | None:
+    return next((p for p in env_candidates() if p.is_file()), None)
+
+
 _CREDENTIALS_HELP = (
-    "Missing ESPN credentials. Copy .env.example to .env and fill in "
-    "ESPN_LEAGUE_ID, ESPN_S2, and ESPN_SWID. See the README for how to pull "
-    "the two cookies out of browser devtools."
+    "Missing ESPN credentials. Looked for, in order:\n"
+    + "\n".join(str(p) for p in env_candidates())
+    + "\nSet $"
+    + ENV_PATH_VAR
+    + " to point somewhere else. "
+    "Needs ESPN_LEAGUE_ID, ESPN_S2 and ESPN_SWID. See the README for how "
+    "to pull the two cookies out of browser devtools."
 )
 
 
@@ -47,7 +69,9 @@ def _normalize_swid(swid: str | None) -> str | None:
 
 
 def load_credentials(require_private: bool = True) -> EspnCredentials:
-    load_dotenv(REPO_ROOT / ".env")
+    found = env_file()
+    if found is not None:
+        load_dotenv(found)
 
     league_id = _clean(os.getenv("ESPN_LEAGUE_ID"))
     if not league_id:

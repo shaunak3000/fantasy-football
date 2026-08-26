@@ -16,7 +16,7 @@ Both headline numbers come from replaying a completed season using only informat
 
 ```bash
 uv sync
-cp .env.example .env          # league id + two ESPN cookies; see below
+cp .env.example ~/Dropbox/secrets/fantasy-football.env   # then fill it in
 
 # Draft
 uv run python -m fantasy_football.live_draft prepare   # the morning of
@@ -60,7 +60,9 @@ Private leagues need a league ID and two browser cookies.
 3. **Cookies** → `https://fantasy.espn.com` (if the list looks short, check `.espn.com`)
 4. Copy the full value of `espn_s2`, and of `SWID` **including its curly braces**
 
-Put all three in `.env`. It is gitignored and a gitleaks pre-commit hook guards it. The cookies expire; a sudden 401 means pull them again.
+Put all three in `~/Dropbox/secrets/fantasy-football.env`. Keeping them in Dropbox rather than the repo means one file serves both machines and there is no credential inside the working tree to commit by mistake.
+
+The loader checks, in order: `$FANTASY_FOOTBALL_ENV`, then a project-local `.env`, then the Dropbox path. First one found wins, so a local `.env` still works for a one-off. The cookies expire; a sudden 401 means pull them again.
 
 ## Notes
 
