@@ -1,0 +1,5 @@
+# Normalize line endings so Windows and macOS checkouts produce identical diffs.
+* text=auto eol=lf
+*.png binary
+*.pkl binary
+*.parquet binary

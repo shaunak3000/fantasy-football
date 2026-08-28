@@ -35,6 +35,20 @@ uv run python -m fantasy_football.check_rehearsal      # draft strategies, head 
 uv run python -m fantasy_football.check_optimizer      # lineup edge, backtested
 ```
 
+## Setting up on another machine
+
+```bash
+git clone https://github.com/shaunak3000/fantasy-football.git
+cd fantasy-football
+uv sync                    # fetches Python 3.12 and every dependency
+uv run pre-commit install  # per-machine; .git/hooks is not cloned
+uv run pytest -q           # 231 tests, no network needed
+```
+
+Credentials are found automatically at `~/Dropbox/secrets/fantasy-football.env` once
+Dropbox has synced. The first command that touches nflverse downloads a few hundred MB
+of historical data into `data/cache/` — expect one slow run, then it is cached.
+
 ## How it decides
 
 **Scoring** is driven entirely by the league's own settings, in ESPN's stat-id space. It reproduces 4,087 historical player-weeks exactly — 100% across 2024 and 2025.
@@ -60,7 +74,7 @@ Private leagues need a league ID and two browser cookies.
 3. **Cookies** → `https://fantasy.espn.com` (if the list looks short, check `.espn.com`)
 4. Copy the full value of `espn_s2`, and of `SWID` **including its curly braces**
 
-Put all three in `~/Dropbox/secrets/fantasy-football.env`. Keeping them in Dropbox rather than the repo means one file serves both machines and there is no credential inside the working tree to commit by mistake.
+Put all three in `~/Dropbox/secrets/fantasy-football.env`. Keeping them in Dropbox rather than the repo means one file serves every machine and there is no credential inside the working tree to commit by mistake — which is the actual protection here. The gitleaks pre-commit hook catches known token formats (GitHub PATs, AWS keys); an ESPN cookie is not a format it recognizes, so do not rely on it for these.
 
 The loader checks, in order: `$FANTASY_FOOTBALL_ENV`, then a project-local `.env`, then the Dropbox path. First one found wins, so a local `.env` still works for a one-off. The cookies expire; a sudden 401 means pull them again.
 
