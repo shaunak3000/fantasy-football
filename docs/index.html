@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Rice Ball Draft Rule</title>
+<meta name="description" content="An eight-team full-PPR draft strategy, and the six more sophisticated ones it beat.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  --paper:#F3F5F4;
+  --surface:#FFFFFF;
+  --sunken:#EAEEEC;
+  --ink:#131E1C;
+  --ink-2:#3D4A47;
+  --muted:#6F7D7A;
+  --rule:#DCE2E0;
+  --rule-strong:#C3CCC9;
+  --win:#00846D;
+  --loss:#BF4A17;
+  --win-wash:#E2F0EC;
+  --loss-wash:#FAEAE2;
+
+  --display:"Bricolage Grotesque","Helvetica Neue",Arial,sans-serif;
+  --body:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+
+  --measure:66ch;
+  --pad:clamp(1.15rem,4vw,2.5rem);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F1616;
+    --surface:#141C1B;
+    --sunken:#1A2422;
+    --ink:#E8EFEC;
+    --ink-2:#B4C1BD;
+    --muted:#849692;
+    --rule:#2A3634;
+    --rule-strong:#3B4A47;
+    --win:#1F9E85;
+    --loss:#D4682C;
+    --win-wash:#132A26;
+    --loss-wash:#2A1C14;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F1616;
+  --surface:#141C1B;
+  --sunken:#1A2422;
+  --ink:#E8EFEC;
+  --ink-2:#B4C1BD;
+  --muted:#849692;
+  --rule:#2A3634;
+  --rule-strong:#3B4A47;
+  --win:#1F9E85;
+  --loss:#D4682C;
+  --win-wash:#132A26;
+  --loss-wash:#2A1C14;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--body);
+  font-size:17px;
+  line-height:1.62;
+  font-variant-numeric:tabular-nums;
+}
+.wrap{max-width:min(94rem,100%);margin:0 auto;padding:0 var(--pad) 5rem}
+.col{max-width:var(--measure);margin-inline:0}
+.wide{max-width:64rem;margin-inline:auto}
+
+/* ---------- masthead ---------- */
+header.mast{
+  border-bottom:1px solid var(--rule-strong);
+  padding:clamp(2.5rem,7vw,4.5rem) 0 clamp(1.5rem,3vw,2.25rem);
+  margin-bottom:clamp(2rem,5vw,3.25rem);
+}
+.eyebrow{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 1.4rem;display:flex;flex-wrap:wrap;gap:.5rem 1.1rem;
+}
+.eyebrow span{white-space:nowrap}
+h1{
+  font-family:var(--display);font-weight:800;
+  font-size:clamp(2.1rem,6.2vw,3.9rem);line-height:1.02;letter-spacing:-.025em;
+  margin:0 0 1.1rem;text-wrap:balance;
+}
+.standfirst{
+  font-size:clamp(1.06rem,2.2vw,1.28rem);color:var(--ink-2);
+  margin:0;max-width:52ch;text-wrap:pretty;
+}
+
+/* ---------- the rule ---------- */
+.rule-card{
+  background:var(--surface);
+  border:1px solid var(--rule);
+  border-left:3px solid var(--win);
+  padding:clamp(1.4rem,3.5vw,2.1rem);
+  margin:0 0 1.25rem;
+}
+.rule-card .label{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--win);margin:0 0 .7rem;
+}
+.rule-card p.rule{
+  font-family:var(--display);font-weight:600;
+  font-size:clamp(1.3rem,3.4vw,1.85rem);line-height:1.24;letter-spacing:-.015em;
+  margin:0;color:var(--ink);text-wrap:balance;
+}
+.rule-card p.gloss{margin:.95rem 0 0;color:var(--ink-2);font-size:.97rem}
+
+/* ---------- stat row ---------- */
+.stats{
+  display:grid;gap:1px;background:var(--rule);
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr));
+  border:1px solid var(--rule);margin:0 0 clamp(2.5rem,6vw,3.75rem);
+}
+.stat{background:var(--surface);padding:1.15rem 1.25rem}
+.stat dt{
+  font-family:var(--mono);font-size:.65rem;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 .5rem;
+}
+.stat dd{
+  margin:0;font-family:var(--display);font-weight:800;
+  font-size:1.85rem;line-height:1;letter-spacing:-.02em;
+}
+.stat dd .unit{font-size:.9rem;font-weight:600;color:var(--muted);margin-left:.25rem}
+.stat .note{display:block;font-family:var(--body);font-size:.83rem;font-weight:400;
+  color:var(--muted);margin-top:.5rem;line-height:1.45;letter-spacing:0}
+
+/* ---------- sections ---------- */
+section{margin:0 0 clamp(2.75rem,7vw,4.5rem)}
+h2{
+  font-family:var(--display);font-weight:800;
+  font-size:clamp(1.35rem,3.2vw,1.85rem);line-height:1.14;letter-spacing:-.02em;
+  margin:0 0 .35rem;text-wrap:balance;
+}
+h2 .num{
+  font-family:var(--mono);font-size:.66rem;font-weight:500;letter-spacing:.16em;
+  color:var(--muted);display:block;margin-bottom:.75rem;
+}
+.dek{color:var(--muted);font-size:.98rem;margin:0 0 1.6rem;max-width:56ch}
+p{margin:0 0 1.05rem}
+p:last-child{margin-bottom:0}
+strong{font-weight:600}
+a{color:var(--win);text-decoration-thickness:1px;text-underline-offset:2px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--win);outline-offset:3px;border-radius:2px}
+code{font-family:var(--mono);font-size:.87em;background:var(--sunken);
+  padding:.1em .38em;border-radius:3px;color:var(--ink-2)}
+
+/* ---------- figures ---------- */
+figure{margin:2rem 0 0;background:var(--surface);border:1px solid var(--rule);padding:clamp(1.1rem,3vw,1.75rem)}
+figure .cap{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 1.25rem;
+}
+.scroll{overflow-x:auto}
+svg{display:block;width:100%;height:auto;min-width:34rem}
+.tick{fill:var(--muted);font-family:var(--mono);font-size:11px;letter-spacing:.06em}
+.rowlab{fill:var(--ink);font-family:var(--body);font-size:14px}
+.rowlab.dim{fill:var(--muted);font-style:italic}
+.val{font-family:var(--mono);font-size:12.5px;font-weight:600;fill:var(--ink-2)}
+.val.win{fill:var(--win)}
+.val.loss{fill:var(--loss)}
+.grid{stroke:var(--rule);stroke-width:1}
+.axis{stroke:var(--rule-strong);stroke-width:1}
+.bar{fill:var(--muted);opacity:.5;transition:opacity .15s}
+.bar.bad{fill:var(--loss);opacity:.85}
+.bar.good{fill:var(--win);opacity:.9}
+.bar.bench{fill:none;stroke:var(--rule-strong);stroke-width:1.5;stroke-dasharray:4 3}
+g.mark:hover .bar{opacity:1}
+figcaption{margin:1.4rem 0 0;font-size:.88rem;color:var(--muted);line-height:1.55;max-width:60ch}
+
+/* ---------- tables ---------- */
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:30rem}
+caption{text-align:left;font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);padding-bottom:1rem}
+th,td{padding:.6rem .85rem;text-align:right;border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left;padding-left:0}
+td:last-child,th:last-child{padding-right:0}
+thead th{
+  font-family:var(--mono);font-size:.63rem;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;border-bottom:1px solid var(--rule-strong);
+}
+tbody td{font-family:var(--mono);font-size:.85rem}
+tbody td:first-child{font-family:var(--body);font-size:.94rem}
+tr.flag td{background:var(--loss-wash)}
+tr.flag td:first-child{font-weight:600}
+.pos{color:var(--win)}
+.neg{color:var(--loss)}
+
+/* ---------- callouts ---------- */
+.aside{
+  border-left:2px solid var(--rule-strong);padding:.1rem 0 .1rem 1.25rem;
+  margin:1.8rem 0;color:var(--ink-2);font-size:.95rem;
+}
+.aside .h{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:.5rem;
+}
+
+/* ---------- runbook ---------- */
+ol.run{list-style:none;counter-reset:none;margin:1.5rem 0 0;padding:0;
+  display:grid;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+ol.run li{background:var(--surface);padding:.9rem 1.1rem;display:grid;
+  grid-template-columns:5.5rem 1fr;gap:.35rem 1.1rem;align-items:baseline}
+ol.run .t{font-family:var(--mono);font-size:.78rem;font-weight:600;color:var(--win);white-space:nowrap}
+ol.run .d{font-size:.94rem}
+ol.run .d code{font-size:.8rem;display:inline-block;margin-top:.15rem}
+ol.run .d em{display:block;color:var(--muted);font-size:.85rem;font-style:normal;margin-top:.3rem}
+
+/* ---------- details ---------- */
+details{border-top:1px solid var(--rule);padding:.9rem 0}
+details:last-of-type{border-bottom:1px solid var(--rule)}
+summary{cursor:pointer;font-family:var(--display);font-weight:600;font-size:1rem;
+  list-style:none;display:flex;justify-content:space-between;gap:1rem;align-items:baseline}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-family:var(--mono);color:var(--muted);font-size:1.1rem}
+details[open] summary::after{content:"\2212"}
+details .body{padding-top:.9rem;color:var(--ink-2);font-size:.95rem}
+
+footer{border-top:1px solid var(--rule-strong);padding-top:1.75rem;margin-top:1rem;
+  font-size:.85rem;color:var(--muted)}
+footer p{margin:0 0 .5rem}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+@media (max-width:34rem){
+  ol.run li{grid-template-columns:1fr}
+  .stat dd{font-size:1.6rem}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <div class="wide">
+    <p class="eyebrow">
+      <span>League &ldquo;Rice Ball&rdquo;</span>
+      <span>8 teams &middot; full PPR &middot; snake</span>
+      <span>Season 2026</span>
+    </p>
+    <h1>The Rice&nbsp;Ball Draft Rule</h1>
+    <p class="standfirst">Six more sophisticated draft strategies were benchmarked against the real 2025 draft. The simplest one won, and the most elaborate one lost by 241 points.</p>
+  </div>
+</header>
+
+<div class="wide">
+
+  <div class="rule-card">
+    <p class="label">The entire strategy</p>
+    <p class="rule">Take the highest&#8209;ranked player at a position you still need.</p>
+    <p class="gloss">That is the whole thing. It is executable from memory if every piece of software fails, which is the point &mdash; the tooling exists to make this rule fast and to keep you honest about roster limits, not to replace it.</p>
+  </div>
+
+  <dl class="stats">
+    <div class="stat">
+      <dt>Draft edge</dt>
+      <dd>+81<span class="unit">pts/season</span></dd>
+      <span class="note">Over the eight human managers, replaying 2025.</span>
+    </div>
+    <div class="stat">
+      <dt>Weekly lineup edge</dt>
+      <dd>+200<span class="unit">pts/season</span></dd>
+      <span class="note">Where the real advantage lives &mdash; 2.5&times; the draft.</span>
+    </div>
+    <div class="stat">
+      <dt>Cost of the fanciest board</dt>
+      <dd class="neg">&minus;241<span class="unit">pts</span></dd>
+      <span class="note">Monte Carlo lookahead, at 5.2 standard errors.</span>
+    </div>
+  </dl>
+
+  <section>
+    <h2><span class="num">01 &mdash; The evidence</span>Everything cleverer lost</h2>
+    <p class="dek">Each strategy replayed the real 2025 draft at all eight slots, fit only on prior seasons, then scored by what its players actually went on to do.</p>
+
+    <div class="col">
+      <p>The result was not close, and it was not the one the design predicted. Ordering by consensus rank and refusing to exceed a roster cap beat every attempt to be smarter about it. The Monte Carlo lookahead board &mdash; the most engineered thing in the repository &mdash; finished 241 points behind at 5.2 standard errors.</p>
+      <p>The rollout confirmed the diagnosis rather than rescuing it. Judging a pick by the finished roster instead of the roster so far moved the same machinery from &minus;241 to &minus;10, at hundreds of times the cost, to produce the same picks as the one&#8209;line rule.</p>
+    </div>
+
+    <figure>
+      <p class="cap">Mean roster points behind the winning rule &middot; 8 slots &times; 2025 replay</p>
+      <div class="scroll">
+        <svg viewBox="0 0 760 322" role="img" aria-label="Bar chart of eight draft strategies ranked by points behind the winning rule. Best available at need is the baseline at 1793 points. Full-draft rollout is 10 behind, best VOR at need 27, championship-objective rollout 49, the human managers 81, tier-aware 89, Monte Carlo lookahead board 241, and pure best-available 371.">
+          <g class="tick" text-anchor="middle">
+            <text x="260" y="17">0</text><text x="370" y="17">100</text><text x="480" y="17">200</text><text x="590" y="17">300</text><text x="700" y="17">400</text>
+          </g>
+          <g class="grid">
+            <line x1="370" y1="26" x2="370" y2="303"/><line x1="480" y1="26" x2="480" y2="303"/>
+            <line x1="590" y1="26" x2="590" y2="303"/><line x1="700" y1="26" x2="700" y2="303"/>
+          </g>
+          <line class="axis" x1="260" y1="26" x2="260" y2="303"/>
+
+          <g class="mark"><title>Best available at need — baseline, 1793 points</title>
+            <text class="rowlab" x="246" y="56" text-anchor="end" font-weight="600">best available at need</text>
+            <circle cx="260" cy="51.5" r="5" fill="var(--win)"/>
+            <text class="val win" x="274" y="56">baseline &middot; 1793 pts</text></g>
+
+          <g class="mark"><title>Full-draft rollout — 10 points behind</title>
+            <text class="rowlab" x="246" y="90" text-anchor="end">full&#8209;draft rollout</text>
+            <path class="bar" d="M260,78 H267 A4,4 0 0 1 271,82 V89 A4,4 0 0 1 267,93 H260 Z"/>
+            <text class="val" x="279" y="90">&minus;10</text></g>
+
+          <g class="mark"><title>Best VOR at need — 27 points behind</title>
+            <text class="rowlab" x="246" y="124" text-anchor="end">best VOR at need</text>
+            <path class="bar" d="M260,112 H285.7 A4,4 0 0 1 289.7,116 V123 A4,4 0 0 1 285.7,127 H260 Z"/>
+            <text class="val" x="297.7" y="124">&minus;27</text></g>
+
+          <g class="mark"><title>Rollout with championship objective — 49 points behind</title>
+            <text class="rowlab" x="246" y="158" text-anchor="end">rollout, championship objective</text>
+            <path class="bar" d="M260,146 H309.9 A4,4 0 0 1 313.9,150 V157 A4,4 0 0 1 309.9,161 H260 Z"/>
+            <text class="val" x="321.9" y="158">&minus;49</text></g>
+
+          <g class="mark"><title>The eight human managers — 81 points behind</title>
+            <text class="rowlab dim" x="246" y="192" text-anchor="end">the humans</text>
+            <path class="bar bench" d="M260,180 H345.1 A4,4 0 0 1 349.1,184 V191 A4,4 0 0 1 345.1,195 H260 Z"/>
+            <text class="val" x="357.1" y="192">&minus;81</text></g>
+
+          <g class="mark"><title>Tier-aware — 89 points behind</title>
+            <text class="rowlab" x="246" y="226" text-anchor="end">tier&#8209;aware</text>
+            <path class="bar" d="M260,214 H353.9 A4,4 0 0 1 357.9,218 V225 A4,4 0 0 1 353.9,229 H260 Z"/>
+            <text class="val" x="365.9" y="226">&minus;89</text></g>
+
+          <g class="mark"><title>Monte Carlo lookahead board — 241 points behind, 5.2 standard errors</title>
+            <text class="rowlab" x="246" y="260" text-anchor="end">monte carlo lookahead board</text>
+            <path class="bar bad" d="M260,248 H521.1 A4,4 0 0 1 525.1,252 V259 A4,4 0 0 1 521.1,263 H260 Z"/>
+            <text class="val loss" x="533.1" y="260">&minus;241</text></g>
+
+          <g class="mark"><title>Pure best-available, ignoring roster needs — 371 points behind</title>
+            <text class="rowlab" x="246" y="294" text-anchor="end">pure best&#8209;available</text>
+            <path class="bar bad" d="M260,282 H664.1 A4,4 0 0 1 668.1,286 V293 A4,4 0 0 1 664.1,297 H260 Z"/>
+            <text class="val loss" x="676.1" y="294">&minus;371</text></g>
+        </svg>
+      </div>
+      <figcaption>The dashed bar is the eight human managers, included as the benchmark rather than as a strategy. Everything below it lost to people drafting on instinct.</figcaption>
+    </figure>
+
+    <div class="col">
+      <div class="aside">
+        <span class="h">The uncomfortable finding</span>
+        <p>The projection pipeline contributes <strong>nothing</strong> to the draft. Both the winner (1793) and pure best&#8209;available (1422) order by raw consensus rank &mdash; the entire 371&#8209;point gap between them is the roster&#8209;cap filter, not any model. And <em>best VOR at need</em> losing to <em>best available at need</em> says it from the other side: converting consensus rank into our own value estimate <strong>destroys</strong> information, because expert consensus already aggregates injury news, depth charts and holdouts that a mechanical rank&#8209;to&#8209;points curve cannot recover.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">02 &mdash; Where the points are</span>The draft is the small half</h2>
+    <p class="dek">Measured on the same 2025 replay, using only projections that existed at the time.</p>
+
+    <figure>
+      <p class="cap">Points per season &middot; 2025 replay, this league</p>
+      <div class="scroll">
+        <svg viewBox="0 0 760 200" role="img" aria-label="Bar chart comparing three season totals: the league leaves 272 points on the bench, the lineup optimizer captures 200 of them, and the entire draft edge is 81 points.">
+          <g class="tick" text-anchor="middle">
+            <text x="260" y="17">0</text><text x="406.7" y="17">100</text><text x="553.3" y="17">200</text><text x="700" y="17">300</text>
+          </g>
+          <g class="grid">
+            <line x1="406.7" y1="26" x2="406.7" y2="162"/><line x1="553.3" y1="26" x2="553.3" y2="162"/><line x1="700" y1="26" x2="700" y2="162"/>
+          </g>
+          <line class="axis" x1="260" y1="26" x2="260" y2="162"/>
+
+          <g class="mark"><title>The league leaves 272 points a season on its benches</title>
+            <text class="rowlab" x="246" y="58" text-anchor="end">left on the bench, league&#8209;wide</text>
+            <path class="bar bench" d="M260,44 H655 A4,4 0 0 1 659,48 V58 A4,4 0 0 1 655,62 H260 Z"/>
+            <text class="val" x="667" y="58">272</text></g>
+
+          <g class="mark"><title>The optimizer captures 200 points a season, 74 percent of the ceiling</title>
+            <text class="rowlab" x="246" y="102" text-anchor="end" font-weight="600">captured by the optimizer</text>
+            <path class="bar good" d="M260,88 H549.3 A4,4 0 0 1 553.3,92 V102 A4,4 0 0 1 549.3,106 H260 Z"/>
+            <text class="val win" x="561.3" y="102">200</text></g>
+
+          <g class="mark"><title>The entire draft edge over the human managers is 81 points</title>
+            <text class="rowlab" x="246" y="146" text-anchor="end">the entire draft edge</text>
+            <path class="bar" d="M260,132 H374.8 A4,4 0 0 1 378.8,136 V146 A4,4 0 0 1 374.8,150 H260 Z"/>
+            <text class="val" x="386.8" y="146">81</text></g>
+        </svg>
+      </div>
+      <figcaption>The dashed bar is the prize, not an achievement: 20.9 points a week that the league&rsquo;s eight managers collectively leave in their bench slots. The optimizer captures 74% of it and beat all eight managers, by margins from +16 to +380.</figcaption>
+    </figure>
+
+    <div class="col">
+      <p>This is why the draft rule is allowed to stay boring. Sixteen picks made with entirely public information, against a consensus that already encodes it, is the worst available place to look for an edge. In&#8209;season there is real asymmetry: your specific roster, your specific weekly matchup, and opponents who set lineups carelessly.</p>
+      <p>One notable null result belongs here too. A matchup&#8209;aware objective &mdash; solving for exact win probability against that week&rsquo;s opponent rather than maximising points &mdash; picked essentially the same lineup as plain projection&#8209;maximising: <strong>+2 points over a whole season</strong>, with only two of eight teams ever diverging. With a full roster, variance gaps between startable players are small next to mean gaps. The 200 points come from starting the right players, not from risk cleverness.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">03 &mdash; Format</span>Why this league&rsquo;s shape drives everything</h2>
+    <p class="dek">Three properties of an eight-team full-PPR league that are easy to get wrong.</p>
+    <div class="col">
+      <p><strong>Eight teams compresses positional scarcity.</strong> Only 72 roster spots start each week, so replacement level is very high and the waiver wire stays deep all season &mdash; a streamed quarterback is worth about what QB8 is worth. The scarcity gradient that powers a normal value&#8209;over&#8209;replacement board is much flatter here. A board that recommends an early quarterback in this league is miscalibrated, not clever.</p>
+      <p><strong>Half the league makes the playoffs, and matchups are one week long.</strong> P(first) &asymp; P(top&nbsp;4) &times; P(win semi) &times; P(win final), where qualifying is the cheap term and the title comes down to two single&#8209;game outcomes. Seeding is worth little beyond making it. So the regular season is played for floor, and weeks 14&ndash;15 are played for ceiling.</p>
+      <p><strong>Waiver priority, not FAAB.</strong> The transactions problem is sequential &mdash; when to spend a priority position &mdash; not a budget allocation.</p>
+    </div>
+
+    <figure>
+      <div class="scroll">
+        <table>
+          <caption>Value of the #1 player at each position, over that position&rsquo;s replacement level</caption>
+          <thead><tr><th>Position</th><th>Replacement rank</th><th>VOR of #1</th><th>Per week</th></tr></thead>
+          <tbody>
+            <tr><td>WR</td><td>22</td><td class="pos">+102</td><td>6.0</td></tr>
+            <tr><td>RB</td><td>18</td><td>+80</td><td>4.7</td></tr>
+            <tr><td>QB</td><td>8</td><td>+47</td><td>2.8</td></tr>
+            <tr><td>TE</td><td>8</td><td>+26</td><td>1.5</td></tr>
+            <tr><td>K</td><td>8</td><td>+25</td><td>1.4</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figcaption>Fit on 2021&ndash;2025 preseason ranks against actual outcomes in this league&rsquo;s scoring, with the flex allocated greedily &mdash; it goes six WR to two RB. Full PPR plus a flex that flows to receivers outweighs running&#8209;back scarcity, so <strong>WR is the most valuable position here, not RB</strong>. Elite quarterback is worth 2.8 points a week over a streamer.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2><span class="num">04 &mdash; Byes</span>One bye week matters; the rest do not</h2>
+    <p class="dek">Measured by drafting a roster at all eight slots, then re-solving the lineup with each bye week&rsquo;s players removed.</p>
+
+    <div class="col">
+      <p>Regular&#8209;season bye collisions are cheap. On a 110&#8209;point lineup they cost 1&ndash;5%, and bench depth absorbs them &mdash; one slot had <em>five</em> players on bye in week 11 and lost only 9.9 points. With four of eight teams making the playoffs, a single soft week rarely decides qualification.</p>
+      <p>Week 14 is the exception, because week 14 is the semifinal. Two teams are on bye then.</p>
+    </div>
+
+    <figure>
+      <div class="scroll">
+        <table>
+          <caption>Cost of a week&#8209;14 bye, averaged over all eight draft slots</caption>
+          <thead><tr><th>Scenario</th><th>Mean pts lost</th><th>Worst slot</th></tr></thead>
+          <tbody>
+            <tr class="flag"><td>Naive &mdash; no replacement</td><td>11.25</td><td>14.63</td></tr>
+            <tr><td>Kicker and D/ST streamed</td><td class="pos">2.63</td><td>6.01</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figcaption><strong>Most of the apparent damage is an artefact.</strong> 8.6 of the 11.25 is a single kicker, drafted by all eight slots because he is ranked first and the roster carries exactly one &mdash; so the model has nothing to put in the slot. Kickers are streamed in reality. The honest figure is 2.63 points, a semifinal win&#8209;probability swing of roughly 3&ndash;5 points.</figcaption>
+    </figure>
+
+    <div class="col">
+      <div class="aside">
+        <span class="h">What this does not justify</span>
+        <p>Avoiding week&#8209;14 players outright. You have to reach the semifinal before a week&#8209;14 bye can cost anything, and the top of the board is where qualification comes from. The free version of this fix is narrower: <strong>take a kicker whose team is not on bye in week 14.</strong> The entire kicker position is worth 1.4 points a week over replacement, so K1 against K4 is noise &mdash; and it removes the single largest bye exposure at no cost.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">05 &mdash; Draft night</span>The runbook</h2>
+    <p class="dek">The draft slot is randomised one hour before kickoff, so the order of these steps is load-bearing.</p>
+    <ol class="run">
+      <li><span class="t">5:00 PM</span><span class="d">Refresh the ESPN cookies. <em>A sudden 401 means they expired; the tool now names the file it is actually reading.</em></span></li>
+      <li><span class="t">5:05 PM</span><span class="d"><code>live_draft prepare</code><em>Expect a scrape date of 09&#8209;04. Seeing 08&#8209;28 is normal, not an error &mdash; the consensus feed publishes weekly on Fridays.</em></span></li>
+      <li><span class="t">5:10 PM</span><span class="d"><code>live_draft plan</code><em>The shape of all eight possible draws.</em></span></li>
+      <li><span class="t">7:30 PM</span><span class="d">Room opens. The slot is drawn now.</span></li>
+      <li><span class="t">7:31 PM</span><span class="d"><code>live_draft plan &lt;slot&gt;</code></span></li>
+      <li><span class="t">7:35 PM</span><span class="d"><code>live_draft watch</code><em>Must start after the shuffle &mdash; it detects your slot at startup, so an earlier start locks in the wrong one.</em></span></li>
+      <li><span class="t">8:30 PM</span><span class="d">Draft in ESPN as normal. No typing; the board follows the live feed.</span></li>
+    </ol>
+    <div class="col">
+      <p style="margin-top:1.5rem">If the feed dies, <code>manual</code> recovers the picks already made from ESPN and lets you continue by typing. If everything breaks, the strategy is the one sentence at the top of this page.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">06 &mdash; Honesty</span>What is measured, and what is not</h2>
+    <p class="dek">Kept separate on purpose. Confidence here is earned per component, not granted to the project as a whole.</p>
+    <div class="col">
+      <details open>
+        <summary>Measured against real outcomes</summary>
+        <div class="body">
+          <p>The scoring engine reproduces 1,922 of 1,922 player&#8209;weeks in 2025 and 2,165 of 2,165 in 2024, exactly &mdash; a hard gate everything downstream depends on. Projection intervals are calibrated: nominal 50/80/90% intervals cover 52.3/80.5/88.7% of held&#8209;out outcomes under leave&#8209;one&#8209;season&#8209;out over 2021&ndash;2025. The lineup optimizer&rsquo;s +200 and the draft rule&rsquo;s +81 are both replays scored on what actually happened.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Advisory &mdash; never validated</summary>
+        <div class="body">
+          <p>Waiver and trade evaluation is priced in title probability but has never been scored, and is blocked rather than skipped: ESPN&rsquo;s activity endpoint returns HTTP 400 for 2024 and 2025, so there is no add/drop history to test against. D/ST projections are fitted on two seasons only. Rookie uncertainty is not modelled at all &mdash; a rookie ranked 40th is priced exactly like a veteran ranked 40th, though his outcome distribution is genuinely wider.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Untestable with the data that exists</summary>
+        <div class="body">
+          <p>Average draft position is the one behavioural signal available &mdash; not another opinion about who is good, but a measurement of when the room actually takes people, restamped daily against a consensus board that is a weekly scrape. The gaps are large: one receiver sits at consensus 72 and goes at ADP 123.</p>
+          <p>It appears on the board as a column and a &ldquo;can wait&rdquo; note, and it <strong>cannot change a pick</strong>. ESPN publishes only a live snapshot, and no historical preseason ADP exists in the data, so the benchmark that killed six strategies has nothing to replay for a seventh. Untestable signals stay advisory.</p>
+        </div>
+      </details>
+      <details>
+        <summary>The metric gap</summary>
+        <div class="body">
+          <p>The strategy benchmark scores rosters by <strong>total season points</strong>, which is structurally blind to <em>when</em> points arrive. A week&#8209;14 bye is invisible to it. So any bye&#8209;aware selection rule is currently untestable, and building a playoff&#8209;weighted roster metric has to come before building the rule.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <footer>
+    <div class="col">
+      <p>Full&#8209;season ESPN fantasy football manager. Python 3.12, PuLP for the lineup MILP, polars via nflreadpy, 228 tests.</p>
+      <p>Figures current as of 2 September 2026. Draft: Friday 4 September 2026, 8:30 PM ET.</p>
+    </div>
+  </footer>
+
+</div>
+</div>
+</body>
+</html>

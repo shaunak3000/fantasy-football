@@ -1,5 +1,7 @@
 # fantasy-football
 
+**Strategy write-up:** [The Rice Ball Draft Rule](https://shaunak3000.github.io/fantasy-football/) — the rule, the six strategies it beat, and what is measured versus advisory. Source in [`docs/`](docs/).
+
 A full-season manager for an ESPN fantasy league, built around one rule: **no strategy ships unless it beats a simple baseline on real historical data.** Several didn't, and were cut.
 
 ## What it does, and what that's worth
