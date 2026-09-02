@@ -23,8 +23,9 @@ import time
 
 import numpy as np
 from espn_api.football import League
+from espn_api.requests.espn_requests import ESPNAccessDenied, ESPNInvalidLeague
 
-from .config import load_credentials
+from .config import env_file, load_credentials
 from .data.espn import fetch_raw_settings, parse_settings
 from .data.nflverse import load_consensus_board
 from .draft.board_view import board_view
@@ -48,7 +49,38 @@ FEED_FAILURE_LIMIT = 10
 
 
 def _league(creds, season=SEASON) -> League:
-    return League(league_id=creds.league_id, year=season, espn_s2=creds.espn_s2, swid=creds.swid)
+    """Open the league, turning an auth failure into instructions rather than a stack trace.
+
+    Every command starts here, so this is the first thing that runs at 7:35 PM on
+    draft night — and expired cookies are the single most likely way it fails.
+    A traceback at that moment is the worst possible output: it buries the one
+    fact that matters (go refresh two cookies) under twenty lines of espn_api
+    internals. The mid-draft feed banner already handles the same failure once
+    polling is underway; this covers the startup path it cannot reach.
+    """
+    try:
+        return League(
+            league_id=creds.league_id, year=season, espn_s2=creds.espn_s2, swid=creds.swid
+        )
+    except (ESPNAccessDenied, ESPNInvalidLeague) as exc:
+        source = env_file()
+        print("\n" + "!" * 72, file=sys.stderr)
+        print("  ESPN REJECTED YOUR CREDENTIALS. Nothing has started.", file=sys.stderr)
+        print("  Almost always this means espn_s2 or SWID has expired.", file=sys.stderr)
+        print(
+            f"\n  Fix: refresh ESPN_S2 + ESPN_SWID in {source or _CREDENTIAL_SOURCE_UNKNOWN}",
+            file=sys.stderr,
+        )
+        print("       (Firefox: F12 -> Storage -> Cookies -> fantasy.espn.com),", file=sys.stderr)
+        print("       then re-run this exact command. Nothing is lost.", file=sys.stderr)
+        print(f"\n  ESPN said: {exc}", file=sys.stderr)
+        print("!" * 72 + "\n", file=sys.stderr)
+        raise SystemExit(1) from None
+
+
+# Shown when no env file was found at all, which load_credentials would normally
+# have caught first — belt and braces so the message is never a bare "None".
+_CREDENTIAL_SOURCE_UNKNOWN = "your credentials file (see README)"
 
 
 def prepare() -> int:
@@ -417,7 +449,8 @@ def watch() -> int:
                     print("\n" + "!" * 72)
                     print("  FEED HAS FAILED REPEATEDLY. The board below is STALE.")
                     print("  Most likely your ESPN cookies expired mid-draft.")
-                    print("  Fix: refresh espn_s2 + SWID in .env, then restart this command —")
+                    print(f"  Fix: refresh ESPN_S2 + ESPN_SWID in {env_file() or 'your env file'},")
+                    print("       then restart this command —")
                     print("       it rebuilds from scratch and loses nothing.")
                     print("  Or:  run 'live_draft manual' — it recovers the picks so far")
                     print("       from ESPN and lets you continue by typing.")
