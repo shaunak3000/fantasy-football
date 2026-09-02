@@ -226,6 +226,29 @@ summary::after{content:"+";font-family:var(--mono);color:var(--muted);font-size:
 details[open] summary::after{content:"\2212"}
 details .body{padding-top:.9rem;color:var(--ink-2);font-size:.95rem}
 
+/* ---------- board ---------- */
+.board-wrap{max-height:none}
+table.board{min-width:36rem;font-size:.85rem}
+table.board thead th{position:sticky;top:0;background:var(--surface);z-index:1}
+table.board thead th:nth-child(2),table.board thead th:nth-child(3),
+table.board thead th:nth-child(4){text-align:left}
+table.board td{padding:.34rem .7rem;border-bottom:1px solid var(--rule)}
+table.board td:nth-child(1){font-family:var(--mono);color:var(--muted);font-size:.78rem;width:3rem}
+table.board td:nth-child(2){font-family:var(--body);font-size:.92rem;text-align:left}
+table.board td:nth-child(3),table.board td:nth-child(4){font-family:var(--mono);font-size:.76rem;
+  letter-spacing:.05em;color:var(--ink-2);text-align:left}
+table.board td:nth-child(3){width:3.2rem}
+table.board td:nth-child(4){width:3.8rem}
+table.board tr.semi td:nth-child(2){font-weight:600}
+table.board .warn{color:var(--loss);font-weight:600}
+table.board .slid{color:var(--win);font-weight:600}
+table.board tbody tr:hover td{background:var(--sunken)}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin:0 0 1.25rem;
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.legend b{font-weight:500}
+.legend .sw{display:inline-block;width:.6rem;height:.6rem;margin-right:.45rem;vertical-align:baseline}
+.stamp{font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;color:var(--muted);margin:0 0 1.5rem}
+
 footer{border-top:1px solid var(--rule-strong);padding-top:1.75rem;margin-top:1rem;
   font-size:.85rem;color:var(--muted)}
 footer p{margin:0 0 .5rem}
@@ -500,6 +523,154 @@ footer p{margin:0 0 .5rem}
         </div>
       </details>
     </div>
+  </section>
+
+  <section>
+    <h2><span class="num">07 &mdash; The board</span>The order, as the rule sees it</h2>
+    <p class="dek">Top 120 of a 128-pick draft, ordered by expert consensus. This <em>is</em> the strategy &mdash; take the highest name here at a position you still need.</p>
+
+    <div class="col">
+      <p>Nothing in this table is our own valuation. The rule reads straight down consensus rank, and the only thing that removes a name is a roster cap. That is deliberate: converting rank into our own points estimate cost 27 points in the benchmark, and ignoring roster caps entirely cost 371.</p>
+      <p>Two columns are context rather than instruction. <strong>ADP</strong> is where the wider ESPN population actually takes a player, and <strong>&Delta;</strong> is how far that sits from our rank &mdash; a large positive number means the room will let him slide, so taking him at our rank is a reach of that many picks. It cannot change a pick, because unlike everything else here it has never been backtested.</p>
+    </div>
+
+    <figure>
+      <p class="stamp">Consensus board scraped 2026-08-28; ADP pulled 02 September 2026. 400 players carry an ADP.</p>
+      <p class="legend">
+        <span><span class="sw" style="background:var(--loss)"></span><b>Bye week 14 &mdash; the semifinal</b></span>
+        <span><span class="sw" style="background:var(--win)"></span><b>&Delta; &ge; +15 &mdash; the room waits</b></span>
+      </p>
+      <div class="scroll board-wrap">
+        <table class="board">
+          <thead><tr><th>#</th><th>Player</th><th>Pos</th><th>Team</th><th>Bye</th><th>ADP</th><th>&Delta;</th></tr></thead>
+          <tbody>
+<!-- BOARD:START -->
+<tr><td>1</td><td>Ja'Marr Chase</td><td>WR</td><td>CIN</td><td>6</td><td>3</td><td><span class="">+2</span></td></tr>
+<tr><td>2</td><td>Jahmyr Gibbs</td><td>RB</td><td>DET</td><td>6</td><td>1</td><td><span class="">-1</span></td></tr>
+<tr><td>3</td><td>Puka Nacua</td><td>WR</td><td>LAR</td><td>11</td><td>4</td><td><span class="">+1</span></td></tr>
+<tr><td>4</td><td>Bijan Robinson</td><td>RB</td><td>ATL</td><td>11</td><td>2</td><td><span class="">-2</span></td></tr>
+<tr><td>5</td><td>Jaxon Smith-Njigba</td><td>WR</td><td>SEA</td><td>11</td><td>5</td><td><span class="">+0</span></td></tr>
+<tr><td>6</td><td>Amon-Ra St. Brown</td><td>WR</td><td>DET</td><td>6</td><td>8</td><td><span class="">+2</span></td></tr>
+<tr class="semi"><td>7</td><td>CeeDee Lamb</td><td>WR</td><td>DAL</td><td><span class="warn">14</span></td><td>10</td><td><span class="">+3</span></td></tr>
+<tr><td>8</td><td>Christian McCaffrey</td><td>RB</td><td>SF</td><td>8</td><td>7</td><td><span class="">-1</span></td></tr>
+<tr><td>9</td><td>Justin Jefferson</td><td>WR</td><td>MIN</td><td>6</td><td>12</td><td><span class="">+3</span></td></tr>
+<tr><td>10</td><td>Jonathan Taylor</td><td>RB</td><td>IND</td><td>13</td><td>6</td><td><span class="">-4</span></td></tr>
+<tr><td>11</td><td>Drake London</td><td>WR</td><td>ATL</td><td>11</td><td>18</td><td><span class="">+7</span></td></tr>
+<tr><td>12</td><td>A.J. Brown</td><td>WR</td><td>NE</td><td>11</td><td>19</td><td><span class="">+7</span></td></tr>
+<tr><td>13</td><td>James Cook III</td><td>RB</td><td>BUF</td><td>7</td><td>9</td><td><span class="">-4</span></td></tr>
+<tr><td>14</td><td>Nico Collins</td><td>WR</td><td>HOU</td><td>8</td><td>24</td><td><span class="">+10</span></td></tr>
+<tr><td>15</td><td>Chase Brown</td><td>RB</td><td>CIN</td><td>6</td><td>15</td><td><span class="">+0</span></td></tr>
+<tr><td>16</td><td>Chris Olave</td><td>WR</td><td>NO</td><td>8</td><td>28</td><td><span class="">+12</span></td></tr>
+<tr><td>17</td><td>Brock Bowers</td><td>TE</td><td>LV</td><td>13</td><td>22</td><td><span class="">+5</span></td></tr>
+<tr class="semi"><td>18</td><td>George Pickens</td><td>WR</td><td>DAL</td><td><span class="warn">14</span></td><td>26</td><td><span class="">+8</span></td></tr>
+<tr><td>19</td><td>De'Von Achane</td><td>RB</td><td>MIA</td><td>6</td><td>11</td><td><span class="">-8</span></td></tr>
+<tr class="semi"><td>20</td><td>Trey McBride</td><td>TE</td><td>ARI</td><td><span class="warn">14</span></td><td>21</td><td><span class="">+1</span></td></tr>
+<tr><td>21</td><td>DeVonta Smith</td><td>WR</td><td>PHI</td><td>10</td><td>34</td><td><span class="">+13</span></td></tr>
+<tr><td>22</td><td>Saquon Barkley</td><td>RB</td><td>PHI</td><td>10</td><td>13</td><td><span class="">-9</span></td></tr>
+<tr><td>23</td><td>Malik Nabers</td><td>WR</td><td>NYG</td><td>8</td><td>30</td><td><span class="">+7</span></td></tr>
+<tr><td>24</td><td>Rashee Rice</td><td>WR</td><td>KC</td><td>5</td><td>27</td><td><span class="">+3</span></td></tr>
+<tr><td>25</td><td>Omarion Hampton</td><td>RB</td><td>LAC</td><td>7</td><td>16</td><td><span class="">-9</span></td></tr>
+<tr><td>26</td><td>Josh Allen</td><td>QB</td><td>BUF</td><td>7</td><td>17</td><td><span class="">-9</span></td></tr>
+<tr><td>27</td><td>Kenneth Walker III</td><td>RB</td><td>KC</td><td>5</td><td>23</td><td><span class="">-4</span></td></tr>
+<tr><td>28</td><td>Ashton Jeanty</td><td>RB</td><td>LV</td><td>13</td><td>20</td><td><span class="">-8</span></td></tr>
+<tr><td>29</td><td>Garrett Wilson</td><td>WR</td><td>NYJ</td><td>13</td><td>35</td><td><span class="">+6</span></td></tr>
+<tr><td>30</td><td>Zay Flowers</td><td>WR</td><td>BAL</td><td>13</td><td>39</td><td><span class="">+9</span></td></tr>
+<tr><td>31</td><td>Lamar Jackson</td><td>QB</td><td>BAL</td><td>13</td><td>31</td><td><span class="">+0</span></td></tr>
+<tr class="slide"><td>32</td><td>Jaylen Waddle</td><td>WR</td><td>DEN</td><td>10</td><td>48</td><td><span class="slid">+16</span></td></tr>
+<tr><td>33</td><td>Ladd McConkey</td><td>WR</td><td>LAC</td><td>7</td><td>42</td><td><span class="">+9</span></td></tr>
+<tr><td>34</td><td>Tetairoa McMillan</td><td>WR</td><td>CAR</td><td>5</td><td>37</td><td><span class="">+3</span></td></tr>
+<tr><td>35</td><td>Tee Higgins</td><td>WR</td><td>CIN</td><td>6</td><td>46</td><td><span class="">+11</span></td></tr>
+<tr><td>36</td><td>Colston Loveland</td><td>TE</td><td>CHI</td><td>10</td><td>38</td><td><span class="">+2</span></td></tr>
+<tr><td>37</td><td>Drake Maye</td><td>QB</td><td>NE</td><td>11</td><td>44</td><td><span class="">+7</span></td></tr>
+<tr><td>38</td><td>Derrick Henry</td><td>RB</td><td>BAL</td><td>13</td><td>14</td><td><span class="">-24</span></td></tr>
+<tr><td>39</td><td>Breece Hall</td><td>RB</td><td>NYJ</td><td>13</td><td>33</td><td><span class="">-6</span></td></tr>
+<tr><td>40</td><td>Emeka Egbuka</td><td>WR</td><td>TB</td><td>10</td><td>40</td><td><span class="">+0</span></td></tr>
+<tr class="semi"><td>41</td><td>Jeremiyah Love</td><td>RB</td><td>ARI</td><td><span class="warn">14</span></td><td>25</td><td><span class="">-16</span></td></tr>
+<tr><td>42</td><td>Kyren Williams</td><td>RB</td><td>LAR</td><td>11</td><td>32</td><td><span class="">-10</span></td></tr>
+<tr class="semi"><td>43</td><td>Javonte Williams</td><td>RB</td><td>DAL</td><td><span class="warn">14</span></td><td>29</td><td><span class="">-14</span></td></tr>
+<tr><td>44</td><td>Joe Burrow</td><td>QB</td><td>CIN</td><td>6</td><td>51</td><td><span class="">+7</span></td></tr>
+<tr class="slide"><td>45</td><td>Josh Jacobs</td><td>RB</td><td>GB</td><td>11</td><td>60</td><td><span class="slid">+15</span></td></tr>
+<tr class="slide"><td>46</td><td>Luther Burden III</td><td>WR</td><td>CHI</td><td>10</td><td>67</td><td><span class="slid">+21</span></td></tr>
+<tr><td>47</td><td>Terry McLaurin</td><td>WR</td><td>WAS</td><td>7</td><td>54</td><td><span class="">+7</span></td></tr>
+<tr><td>48</td><td>Travis Etienne Jr.</td><td>RB</td><td>NO</td><td>8</td><td>36</td><td><span class="">-12</span></td></tr>
+<tr><td>49</td><td>Davante Adams</td><td>WR</td><td>LAR</td><td>11</td><td>43</td><td><span class="">-6</span></td></tr>
+<tr><td>50</td><td>DJ Moore</td><td>WR</td><td>BUF</td><td>7</td><td>55</td><td><span class="">+5</span></td></tr>
+<tr><td>51</td><td>Tyler Warren</td><td>TE</td><td>IND</td><td>13</td><td>47</td><td><span class="">-4</span></td></tr>
+<tr><td>52</td><td>Jayden Daniels</td><td>QB</td><td>WAS</td><td>7</td><td>50</td><td><span class="">-2</span></td></tr>
+<tr><td>53</td><td>D'Andre Swift</td><td>RB</td><td>CHI</td><td>10</td><td>49</td><td><span class="">-4</span></td></tr>
+<tr><td>54</td><td>Jameson Williams</td><td>WR</td><td>DET</td><td>6</td><td>58</td><td><span class="">+4</span></td></tr>
+<tr class="slide"><td>55</td><td>Mike Evans</td><td>WR</td><td>SF</td><td>8</td><td>74</td><td><span class="slid">+19</span></td></tr>
+<tr><td>56</td><td>Jalen Hurts</td><td>QB</td><td>PHI</td><td>10</td><td>52</td><td><span class="">-4</span></td></tr>
+<tr><td>57</td><td>Cam Skattebo</td><td>RB</td><td>NYG</td><td>8</td><td>41</td><td><span class="">-16</span></td></tr>
+<tr><td>58</td><td>Rome Odunze</td><td>WR</td><td>CHI</td><td>10</td><td>59</td><td><span class="">+1</span></td></tr>
+<tr class="slide"><td>59</td><td>Christian Watson</td><td>WR</td><td>GB</td><td>11</td><td>80</td><td><span class="slid">+21</span></td></tr>
+<tr><td>60</td><td>Bucky Irving</td><td>RB</td><td>TB</td><td>10</td><td>53</td><td><span class="">-7</span></td></tr>
+<tr><td>61</td><td>David Montgomery</td><td>RB</td><td>HOU</td><td>8</td><td>57</td><td><span class="">-4</span></td></tr>
+<tr><td>62</td><td>Quinshon Judkins</td><td>RB</td><td>CLE</td><td>11</td><td>45</td><td><span class="">-17</span></td></tr>
+<tr class="slide"><td>63</td><td>Parker Washington</td><td>WR</td><td>JAC</td><td>7</td><td>82</td><td><span class="slid">+19</span></td></tr>
+<tr class="slide"><td>64</td><td>Caleb Williams</td><td>QB</td><td>CHI</td><td>10</td><td>83</td><td><span class="slid">+19</span></td></tr>
+<tr><td>65</td><td>Bhayshul Tuten</td><td>RB</td><td>JAC</td><td>7</td><td>56</td><td><span class="">-9</span></td></tr>
+<tr><td>66</td><td>Carnell Tate</td><td>WR</td><td>TEN</td><td>9</td><td>68</td><td><span class="">+2</span></td></tr>
+<tr class="semi"><td>67</td><td>Marvin Harrison Jr.</td><td>WR</td><td>ARI</td><td><span class="warn">14</span></td><td>70</td><td><span class="">+3</span></td></tr>
+<tr><td>68</td><td>TreVeyon Henderson</td><td>RB</td><td>NE</td><td>11</td><td>69</td><td><span class="">+1</span></td></tr>
+<tr><td>69</td><td>Justin Herbert</td><td>QB</td><td>LAC</td><td>7</td><td>77</td><td><span class="">+8</span></td></tr>
+<tr><td>70</td><td>Jadarian Price</td><td>RB</td><td>SEA</td><td>11</td><td>61</td><td><span class="">-9</span></td></tr>
+<tr><td>71</td><td>Harold Fannin Jr.</td><td>TE</td><td>CLE</td><td>11</td><td>63</td><td><span class="">-8</span></td></tr>
+<tr class="slide"><td>72</td><td>Chris Godwin Jr.</td><td>WR</td><td>TB</td><td>10</td><td>114</td><td><span class="slid">+42</span></td></tr>
+<tr><td>73</td><td>Rhamondre Stevenson</td><td>RB</td><td>NE</td><td>11</td><td>71</td><td><span class="">-2</span></td></tr>
+<tr><td>74</td><td>Jaylen Warren</td><td>RB</td><td>PIT</td><td>9</td><td>78</td><td><span class="">+4</span></td></tr>
+<tr class="slide"><td>75</td><td>Trevor Lawrence</td><td>QB</td><td>JAC</td><td>7</td><td>90</td><td><span class="slid">+15</span></td></tr>
+<tr class="semi"><td>76</td><td>Dak Prescott</td><td>QB</td><td>DAL</td><td><span class="warn">14</span></td><td>64</td><td><span class="">-12</span></td></tr>
+<tr><td>77</td><td>DK Metcalf</td><td>WR</td><td>PIT</td><td>9</td><td>75</td><td><span class="">-2</span></td></tr>
+<tr><td>78</td><td>Kyle Pitts Sr.</td><td>TE</td><td>ATL</td><td>11</td><td>62</td><td><span class="">-16</span></td></tr>
+<tr class="slide"><td>79</td><td>Brian Thomas Jr.</td><td>WR</td><td>JAC</td><td>7</td><td>108</td><td><span class="slid">+29</span></td></tr>
+<tr><td>80</td><td>Michael Pittman Jr.</td><td>WR</td><td>PIT</td><td>9</td><td>81</td><td><span class="">+1</span></td></tr>
+<tr><td>81</td><td>Tucker Kraft</td><td>TE</td><td>GB</td><td>11</td><td>84</td><td><span class="">+3</span></td></tr>
+<tr><td>82</td><td>Courtland Sutton</td><td>WR</td><td>DEN</td><td>10</td><td>72</td><td><span class="">-10</span></td></tr>
+<tr><td>83</td><td>Tony Pollard</td><td>RB</td><td>TEN</td><td>9</td><td>79</td><td><span class="">-4</span></td></tr>
+<tr class="slide"><td>84</td><td>Wan'Dale Robinson</td><td>WR</td><td>TEN</td><td>9</td><td>107</td><td><span class="slid">+23</span></td></tr>
+<tr><td>85</td><td>Sam LaPorta</td><td>TE</td><td>DET</td><td>6</td><td>65</td><td><span class="">-20</span></td></tr>
+<tr class="slide"><td>86</td><td>Josh Downs</td><td>WR</td><td>IND</td><td>13</td><td>132</td><td><span class="slid">+46</span></td></tr>
+<tr class="semi"><td>87</td><td>Michael Wilson</td><td>WR</td><td>ARI</td><td><span class="warn">14</span></td><td>93</td><td><span class="">+6</span></td></tr>
+<tr><td>88</td><td>Rico Dowdle</td><td>RB</td><td>PIT</td><td>9</td><td>88</td><td><span class="">+0</span></td></tr>
+<tr><td>89</td><td>Jonathon Brooks</td><td>RB</td><td>CAR</td><td>5</td><td>97</td><td><span class="">+8</span></td></tr>
+<tr class="slide"><td>90</td><td>Quentin Johnston</td><td>WR</td><td>LAC</td><td>7</td><td>124</td><td><span class="slid">+34</span></td></tr>
+<tr><td>91</td><td>Stefon Diggs</td><td>WR</td><td>WAS</td><td>7</td><td>94</td><td><span class="">+3</span></td></tr>
+<tr><td>92</td><td>Brock Purdy</td><td>QB</td><td>SF</td><td>8</td><td>102</td><td><span class="">+10</span></td></tr>
+<tr><td>93</td><td>Jaxson Dart</td><td>QB</td><td>NYG</td><td>8</td><td>73</td><td><span class="">-20</span></td></tr>
+<tr class="slide"><td>94</td><td>RJ Harvey</td><td>RB</td><td>DEN</td><td>10</td><td>121</td><td><span class="slid">+27</span></td></tr>
+<tr><td>95</td><td>Travis Kelce</td><td>TE</td><td>KC</td><td>5</td><td>87</td><td><span class="">-8</span></td></tr>
+<tr><td>96</td><td>George Kittle</td><td>TE</td><td>SF</td><td>8</td><td>66</td><td><span class="">-30</span></td></tr>
+<tr><td>97</td><td>Chuba Hubbard</td><td>RB</td><td>CAR</td><td>5</td><td>98</td><td><span class="">+1</span></td></tr>
+<tr><td>98</td><td>Bo Nix</td><td>QB</td><td>DEN</td><td>10</td><td>92</td><td><span class="">-6</span></td></tr>
+<tr><td>99</td><td>Kenny Gainwell</td><td>RB</td><td>TB</td><td>10</td><td>91</td><td><span class="">-8</span></td></tr>
+<tr><td>100</td><td>Alec Pierce</td><td>WR</td><td>IND</td><td>13</td><td>100</td><td><span class="">+0</span></td></tr>
+<tr><td>101</td><td>J.K. Dobbins</td><td>RB</td><td>DEN</td><td>10</td><td>104</td><td><span class="">+3</span></td></tr>
+<tr><td>102</td><td>Patrick Mahomes II</td><td>QB</td><td>KC</td><td>5</td><td>99</td><td><span class="">-3</span></td></tr>
+<tr class="slide"><td>103</td><td>Jayden Reed</td><td>WR</td><td>GB</td><td>11</td><td>135</td><td><span class="slid">+32</span></td></tr>
+<tr><td>104</td><td>Matthew Stafford</td><td>QB</td><td>LAR</td><td>11</td><td>86</td><td><span class="">-18</span></td></tr>
+<tr><td>105</td><td>Jakobi Meyers</td><td>WR</td><td>JAC</td><td>7</td><td>116</td><td><span class="">+11</span></td></tr>
+<tr><td>106</td><td>Jordan Addison</td><td>WR</td><td>MIN</td><td>6</td><td>112</td><td><span class="">+6</span></td></tr>
+<tr class="slide"><td>107</td><td>Jared Goff</td><td>QB</td><td>DET</td><td>6</td><td>130</td><td><span class="slid">+23</span></td></tr>
+<tr class="slide"><td>108</td><td>Makai Lemon</td><td>WR</td><td>PHI</td><td>10</td><td>127</td><td><span class="slid">+19</span></td></tr>
+<tr><td>109</td><td>Rachaad White</td><td>RB</td><td>WAS</td><td>7</td><td>119</td><td><span class="">+10</span></td></tr>
+<tr><td>110</td><td>Blake Corum</td><td>RB</td><td>LAR</td><td>11</td><td>122</td><td><span class="">+12</span></td></tr>
+<tr class="slide"><td>111</td><td>Dalton Kincaid</td><td>TE</td><td>BUF</td><td>7</td><td>126</td><td><span class="slid">+15</span></td></tr>
+<tr class="slide"><td>112</td><td>Kyler Murray</td><td>QB</td><td>MIN</td><td>6</td><td>133</td><td><span class="slid">+21</span></td></tr>
+<tr class="slide"><td>113</td><td>Jacory Croskey-Merritt</td><td>RB</td><td>WAS</td><td>7</td><td>129</td><td><span class="slid">+16</span></td></tr>
+<tr class="slide"><td>114</td><td>Jordan Mason</td><td>RB</td><td>MIN</td><td>6</td><td>136</td><td><span class="slid">+22</span></td></tr>
+<tr><td>115</td><td>Aaron Jones Sr.</td><td>RB</td><td>MIN</td><td>6</td><td>109</td><td><span class="">-6</span></td></tr>
+<tr><td>116</td><td>Kyle Monangai</td><td>RB</td><td>CHI</td><td>10</td><td>117</td><td><span class="">+1</span></td></tr>
+<tr><td>117</td><td>Dallas Goedert</td><td>TE</td><td>PHI</td><td>10</td><td>96</td><td><span class="">-21</span></td></tr>
+<tr class="slide"><td>118</td><td>KC Concepcion</td><td>WR</td><td>CLE</td><td>11</td><td>145</td><td><span class="slid">+27</span></td></tr>
+<tr class="slide"><td>119</td><td>Baker Mayfield</td><td>QB</td><td>TB</td><td>10</td><td>143</td><td><span class="slid">+24</span></td></tr>
+<tr class="semi"><td>120</td><td>Jake Ferguson</td><td>TE</td><td>DAL</td><td><span class="warn">14</span></td><td>101</td><td><span class="">-19</span></td></tr>
+<!-- BOARD:END -->
+          </tbody>
+        </table>
+      </div>
+      <figcaption>Regenerate with <code>uv run python docs/render_board.py</code> after any <code>live_draft prepare</code>. Rankings move daily, so a stamp more than a few days old means this table is behind the tool.</figcaption>
+    </figure>
   </section>
 
   <footer>
