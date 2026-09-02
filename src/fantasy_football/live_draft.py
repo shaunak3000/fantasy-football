@@ -62,7 +62,26 @@ def _league(creds, season=SEASON) -> League:
         return League(
             league_id=creds.league_id, year=season, espn_s2=creds.espn_s2, swid=creds.swid
         )
-    except (ESPNAccessDenied, ESPNInvalidLeague) as exc:
+    except ESPNInvalidLeague as exc:
+        # Distinct from an auth failure and must not be reported as one. Since the
+        # league id can be overridden (ESPN_LEAGUE_ID=... to point at a mock draft),
+        # a typo lands here — and sending someone to re-copy two cookies over a
+        # wrong id would waste the one resource draft night does not have.
+        print("\n" + "!" * 72, file=sys.stderr)
+        print(f"  NO SUCH LEAGUE: {creds.league_id} (season {season}).", file=sys.stderr)
+        print("  Your cookies are fine — this is the league id.", file=sys.stderr)
+        print(
+            f"\n  Reading ESPN_LEAGUE_ID from: {env_file() or _CREDENTIAL_SOURCE_UNKNOWN}",
+            file=sys.stderr,
+        )
+        print(
+            "  If you meant to point at a mock draft, check the leagueId in its URL.",
+            file=sys.stderr,
+        )
+        print(f"\n  ESPN said: {exc}", file=sys.stderr)
+        print("!" * 72 + "\n", file=sys.stderr)
+        raise SystemExit(1) from None
+    except ESPNAccessDenied as exc:
         source = env_file()
         print("\n" + "!" * 72, file=sys.stderr)
         print("  ESPN REJECTED YOUR CREDENTIALS. Nothing has started.", file=sys.stderr)
