@@ -25,6 +25,12 @@ from .strategies import best_available_at_need
 
 SURVIVAL_TRIALS = 300
 
+# Cushion, in picks, before ADP is allowed to say "you can wait". ESPN publishes
+# only the mean draft position with no spread, so a player whose ADP sits barely
+# past your next turn is a coin flip, not a wait. One round in this league is
+# eight picks; requiring a full round of daylight keeps the hint honest.
+ADP_WAIT_CUSHION = 8
+
 # Picks looked back over when deciding whether a position is being run on.
 RUN_WINDOW = 8
 # A position taken this many times more often than its baseline share counts as
@@ -77,6 +83,23 @@ class BoardRow:
     survival: float
     fills_a_need: bool
     recommended: bool = False
+    # Where the wider ESPN population actually takes this player, as an ordinal
+    # rank. None when ESPN lists no ADP for him — common for deep bench players
+    # and most defences.
+    adp_rank: int | None = None
+    # Picks of daylight between your next turn and where the room takes him.
+    # Positive means ADP expects him to still be there.
+    adp_slack: int | None = None
+
+    @property
+    def can_wait(self) -> bool:
+        """ADP says this player survives your next turn with a round to spare.
+
+        Purely informational. The recommendation is never changed by it — the
+        rehearsal was unambiguous that making the selection rule cleverer loses,
+        and this is a signal that has never been backtested at all.
+        """
+        return self.adp_slack is not None and self.adp_slack >= ADP_WAIT_CUSHION
 
     @property
     def likely_gone(self) -> bool:
@@ -148,6 +171,7 @@ def board_view(
     settings,
     top: int = 8,
     trials: int = SURVIVAL_TRIALS,
+    adp: dict[int, int] | None = None,
 ) -> list[BoardRow]:
     """The draft-night board: the pick to make, plus the alternatives."""
     by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
@@ -182,6 +206,15 @@ def board_view(
     # nothing flagged and any caller falling back to the wrong player.
     eligible = [pair for pair in eligible if pair[0] != chosen_index]
     eligible.insert(0, (chosen_index, available[chosen_index]))
+    adp = adp or {}
+    next_pick = state.next_pick_for_me()
+
+    def adp_for(projection):
+        rank = adp.get(projection.espn_id)
+        if rank is None or next_pick is None:
+            return rank, None
+        return rank, rank - next_pick
+
     rows = [
         BoardRow(
             player=p.player,
@@ -195,6 +228,8 @@ def board_view(
             survival=odds.get(i, 1.0),
             fills_a_need=p.position in needed,
             recommended=(i == chosen_index),
+            adp_rank=adp_for(p)[0],
+            adp_slack=adp_for(p)[1],
         )
         for i, p in eligible[:top]
     ]

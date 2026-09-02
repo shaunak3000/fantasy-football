@@ -26,7 +26,7 @@ from espn_api.football import League
 from espn_api.requests.espn_requests import ESPNAccessDenied, ESPNInvalidLeague
 
 from .config import env_file, load_credentials
-from .data.espn import fetch_raw_settings, parse_settings
+from .data.espn import fetch_adp, fetch_raw_settings, parse_settings
 from .data.nflverse import load_consensus_board
 from .draft.board_view import board_view
 from .draft.cache import load_bundle, save_bundle
@@ -119,7 +119,17 @@ def prepare() -> int:
         return 1
     print(f"  draft model:  {model.n_observations} picks from {sizes}")
 
-    path = save_bundle(SEASON, projections, model)
+    # ADP is the freshest input in the bundle — ESPN restamps it daily, while the
+    # consensus board is a weekly scrape. It is also the only one that is pure
+    # context, so a failure here must not cost us a prepared draft.
+    try:
+        adp = fetch_adp(_league(creds))
+        print(f"  ADP:          {len(adp)} players from live ESPN drafts")
+    except Exception as exc:  # noqa: BLE001 - context only, never worth failing prepare
+        adp = {}
+        print(f"  ADP:          unavailable ({exc}) - board will run without it")
+
+    path = save_bundle(SEASON, projections, model, adp=adp)
     print(f"\nSaved to {path}")
     print("Re-run this the morning of the draft so the rankings are fresh.")
     return 0
@@ -163,7 +173,12 @@ def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> 
             return
 
     rows = board_view(
-        state, bundle.projections.projections, bundle.pick_model, settings, trials=LIVE_TRIALS
+        state,
+        bundle.projections.projections,
+        bundle.pick_model,
+        settings,
+        trials=LIVE_TRIALS,
+        adp=getattr(bundle, "adp", None),
     )
     if not rows:
         print("No players left to recommend.")
@@ -175,15 +190,49 @@ def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> 
         print(f"\n  >>> TAKE: {best.player} ({best.position}, {best.team})")
         print(f"      {best.rationale()}")
 
-    print(f"\n  {'player':<22} {'pos':<4} {'rank':>5} {'VOR':>6} {'survive':>8}")
+    print(f"\n  {'player':<22} {'pos':<4} {'rank':>5} {'VOR':>6} {'survive':>8} {'ADP':>5}")
     for row in rows[:6]:
         flag = " <-gone" if row.likely_gone else ""
+        if row.can_wait:
+            flag = f" <-can wait (+{row.adp_slack})"
+        adp = str(row.adp_rank) if row.adp_rank else "-"
         print(
             f"  {row.player:<22} {row.position:<4} {row.overall_rank:>5} "
-            f"{row.vor:>6.0f} {row.survival:>7.0%}{flag}"
+            f"{row.vor:>6.0f} {row.survival:>7.0%} {adp:>5}{flag}"
         )
+
+    _print_wait_hint(rows, state)
     print(f"\n  still need: {', '.join(still_need) if still_need else 'nothing'}")
     print("=" * 72)
+
+
+def _print_wait_hint(rows, state) -> None:
+    """Say so when the room would let the recommended player slide.
+
+    Our board ranks by consensus and has no idea when anyone actually goes, so
+    it will happily spend an early pick on someone the room ignores for another
+    fifty. This does not change the recommendation — it names the cost, and a
+    human with the roster in front of him decides.
+    """
+    best = next((row for row in rows if row.recommended), None)
+    if best is None or not best.can_wait:
+        return
+    next_pick = state.next_pick_for_me()
+    # Only worth raising if there is something to do instead: a player who fills
+    # a need and, by ADP, will NOT survive that long.
+    alternatives = [
+        row
+        for row in rows
+        if row is not best and row.fills_a_need and row.adp_slack is not None and row.adp_slack < 0
+    ]
+    print(
+        f"\n  NOTE: ADP puts {best.player} around pick {best.adp_rank}; "
+        f"you pick again at {next_pick}."
+    )
+    if alternatives:
+        names = ", ".join(f"{r.player} (ADP {r.adp_rank})" for r in alternatives[:2])
+        print(f"        Likely gone by then: {names}")
+    print("        Untested signal - the recommendation above is unchanged.")
 
 
 def plan(argv: list[str] | None = None) -> int:

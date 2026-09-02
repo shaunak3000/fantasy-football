@@ -273,3 +273,49 @@ def load_settings_snapshot(league_id: int, season: int) -> LeagueSettings:
     path = cache_path(f"settings_{league_id}_{season}.json")
     payload = json.loads(path.read_text(encoding="utf-8"))
     return parse_settings(payload["settings"], league_id, season)
+
+
+# How many players to ask ESPN for when pulling ADP. Our draft is 128 picks;
+# pulling well past that keeps the ordinal ranking stable at the bottom of the
+# board, where late-round kickers and defences live.
+ADP_FETCH_LIMIT = 400
+
+
+def fetch_adp(league: League, limit: int = ADP_FETCH_LIMIT) -> dict[int, int]:
+    """Average draft position from real ESPN drafts, as an ordinal rank.
+
+    This is the only *behavioural* signal available: not another opinion about
+    who is good, but a measurement of when the room actually takes people. It
+    updates daily and is typically fresher than the consensus board.
+
+    Returned as a rank (1 = first off the board), never as ESPN's raw pick
+    number. ESPN's ADP is drawn mostly from 10- and 12-team leagues, whose
+    drafts run 160-192 picks against our 128, so the raw figure overstates how
+    long a player lasts here. The ordering is the part that transfers; the pick
+    numbers are not, and mixing the two would quietly mis-time every pick.
+    """
+    payload = {
+        "players": {
+            "limit": limit,
+            "sortDraftRanks": {"sortPriority": 1, "sortAsc": True, "value": "PPR"},
+        }
+    }
+    data = league.espn_request.league_get(
+        params={"view": "kona_player_info"},
+        headers={"x-fantasy-filter": json.dumps(payload)},
+    )
+
+    drafted = []
+    for entry in data.get("players", []):
+        player = entry.get("player") or {}
+        ownership = player.get("ownership") or {}
+        adp = ownership.get("averageDraftPosition")
+        player_id = player.get("id")
+        # ESPN reports 0.0 for players nobody drafts, which would otherwise sort
+        # them to the very top of the board.
+        if player_id is None or not adp or adp <= 0:
+            continue
+        drafted.append((float(adp), int(player_id)))
+
+    drafted.sort()
+    return {player_id: rank for rank, (_, player_id) in enumerate(drafted, start=1)}

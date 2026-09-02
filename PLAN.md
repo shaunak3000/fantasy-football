@@ -74,6 +74,26 @@ Three properties of this format drive the modeling and are easy to get wrong:
       So the draft is settled: consensus rank plus roster discipline, with the simulation demoted to supplying survival odds for context (`board_view` separates information from authority on purpose). The projection pipeline still has one validated asset nothing yet uses — calibrated *distributions*, verified at 80.5% coverage on held-out seasons. That is an in-season instrument, not a draft one.
 
       Caveat on the championship objective: it was scored by expected points, which is the metric it is deliberately not optimizing, so its −49 is not evidence against it. Judging it fairly needs the season simulator.
+      **ADP (added 2026-09-02) — context only, and deliberately kept out of the decision.**
+      ESPN's `ownership.averageDraftPosition` is the one *behavioural* signal available:
+      not another opinion about who is good, but a measurement of when the room actually
+      takes people. It is also the freshest input in the bundle — ESPN restamps it daily,
+      against a weekly consensus scrape.
+
+      The gaps against our board are large and one-directional in places: Chris Godwin is
+      consensus 72 and goes at ADP 123, Josh Downs 86 against 137, Brian Thomas Jr. 79
+      against 114. Without ADP the board cannot see that it is reaching — it will spend an
+      early pick on a player the room ignores for another fifty.
+
+      So the board now prints an ADP column and, when the recommended player has a full
+      round of daylight past your next turn, a note naming who will be gone instead. It
+      does **not** enter the selection rule. Six cleverer rules lost the rehearsal, and
+      unlike those, an ADP rule cannot even be scored: ESPN publishes a live snapshot, no
+      historical preseason ADP exists in our data, so `check_rehearsal` has nothing to
+      replay. Untestable signals stay advisory. Stored as an ordinal rank, never ESPN's raw
+      pick number — their ADP comes from 10- and 12-team drafts running 160-192 picks
+      against our 128, so the ordering transfers and the pick numbers do not.
+
 - [x] 8. **Weekly lineup optimizer** (`lineup/optimizer.py`) — MILP via PuLP over the league's real slot rules, so an illegal lineup is impossible by construction. **This is where the edge actually lives.**
 
       `check_lineups` measured the prize: the league leaves **272 points a season on the bench** (20.9/week), against a total draft edge of 81. `check_optimizer` then replayed all of 2025 using only ESPN's contemporaneous weekly projections and scored the result on what actually happened: **+200 points a season, +15.4 per week, capturing 74% of the ceiling — and beating all eight managers**, by margins from +16 to +380.
