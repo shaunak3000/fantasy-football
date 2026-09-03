@@ -37,7 +37,6 @@ from .draft.model import fit_pick_model
 from .draft.recommend import roster_limits
 from .draft.script import DEFAULT_TRIALS, forecast, target_survival
 from .draft.state import DraftState, snake_slot_for_pick
-from .draft.strategies import best_available_at_need
 from .projections.build import build
 
 SEASON = 2026
@@ -177,12 +176,6 @@ def _render(
             return
 
     adp = getattr(bundle, "adp", None)
-    play = None
-    if disrupt and state.is_my_turn:
-        current_id = best_available_at_need(state, bundle.projections.projections, settings, by_id)
-        play = disruptive_pick(
-            state, bundle.projections.projections, settings, by_id, adp, current_id=current_id
-        )
     rows = board_view(
         state,
         bundle.projections.projections,
@@ -190,19 +183,18 @@ def _render(
         settings,
         trials=LIVE_TRIALS,
         adp=adp,
-        play=play,
     )
     if not rows:
         print("No players left to recommend.")
         print("=" * 72)
         return
 
+    covered = False
     if state.is_my_turn:
         best = next((row for row in rows if row.recommended), rows[0])
         print(f"\n  >>> TAKE: {best.player} ({best.position}, {best.team})")
         print(f"      {best.rationale()}")
-        if play is not None and play.espn_id == best.espn_id:
-            print(f"      [{play.label.upper()}] {play.why}")
+        covered = _print_alternative(state, bundle, settings, by_id, adp, best, disrupt)
 
     print(f"\n  {'player':<22} {'pos':<4} {'rank':>5} {'VOR':>6} {'survive':>8} {'ADP':>5}")
     for row in rows[:6]:
@@ -215,9 +207,42 @@ def _render(
             f"{row.vor:>6.0f} {row.survival:>7.0%} {adp:>5}{flag}"
         )
 
-    _print_wait_hint(rows, state)
+    if not covered:
+        _print_wait_hint(rows, state)
     print(f"\n  still need: {', '.join(still_need) if still_need else 'nothing'}")
     print("=" * 72)
+
+
+def _print_alternative(state, bundle, settings, by_id, adp, best, disrupt: bool) -> bool:
+    """Offer the adversarial play as an alternative, never as the pick.
+
+    The recommendation above always comes from the rule that won the rehearsal.
+    These plays have never been scored against it, so presenting one as the answer
+    would give an untested idea the same standing as a measured one — and under a
+    90-second clock a silent substitution is the one thing you cannot audit.
+    Naming it, with its reason, leaves the choice where it belongs.
+    """
+    if not disrupt or best.espn_id is None:
+        return False
+    play = disruptive_pick(
+        state,
+        bundle.projections.projections,
+        settings,
+        by_id,
+        adp,
+        current_id=best.espn_id,
+    )
+    if play is None or play.espn_id == best.espn_id:
+        return False
+    alt = by_id.get(play.espn_id)
+    if alt is None:
+        return False
+    print(f"      ALT [{play.label}]: {alt.player} ({alt.position}, {alt.team})")
+    print(f"           {play.why}")
+    # The deferral says exactly what the wait hint says, only concretely — it
+    # names the swap rather than describing the gap. Printing both spends the
+    # clock twice on one idea.
+    return play.label == "ADP deferral"
 
 
 def _print_wait_hint(rows, state) -> None:
@@ -517,8 +542,8 @@ def watch(argv: list[str] | None = None) -> int:
 
     if disrupt:
         print(
-            f"  Adversarial plays ON from round {DEFAULT_FIRST_ROUND}. "
-            "They only ever spend picks worth nothing; the rule is unchanged above that."
+            f"  Adversarial plays shown from round {DEFAULT_FIRST_ROUND} as an ALT line. "
+            "They never change the recommendation - you choose."
         )
     print("Watching for picks. Draft in ESPN as normal; Ctrl-C to stop.\n")
     last_shown = -1

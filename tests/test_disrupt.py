@@ -124,3 +124,42 @@ class TestPairAtTheTurn:
         state = DraftState(team_count=2, rounds=4, my_slot=2)
         state.record(99)
         assert pair_at_the_turn(state, [a, b], {"TE", "WR"}) is None
+
+
+class TestAdvisoryOnly:
+    """The plays are untested against check_rehearsal, so they never decide."""
+
+    def test_board_view_takes_no_play_argument(self):
+        """Overriding used to be possible here. It must not be reachable at all."""
+        import inspect
+
+        from fantasy_football.draft.board_view import board_view
+
+        assert "play" not in inspect.signature(board_view).parameters
+
+    def test_recommendation_is_the_rule_regardless_of_adp(self):
+        import numpy as np
+        import polars as pl
+
+        from fantasy_football.draft.board_view import board_view
+        from fantasy_football.draft.model import fit_pick_model
+        from fantasy_football.draft.strategies import best_available_at_need
+
+        board = [
+            player(i, f"P{i}", ["WR", "RB", "TE", "QB"][i % 4], "AAA", i, mean=300.0 - 2.0 * i)
+            for i in range(1, 61)
+        ]
+        by_id = {p.espn_id: p for p in board}
+        rng = np.random.default_rng(0)
+        model = fit_pick_model(
+            pl.DataFrame(
+                [(2024, r, max(1, r + rng.normal(0, 6))) for r in range(1, 150) for _ in range(2)],
+                schema=["season", "consensus_rank", "overall_pick"],
+                orient="row",
+            )
+        )
+        state = DraftState(team_count=8, rounds=16, my_slot=1)
+        hostile = {p.espn_id: 200 - p.consensus_overall_rank for p in board}
+        rows = board_view(state, board, model, Settings(), adp=hostile)
+        recommended = next(r.espn_id for r in rows if r.recommended)
+        assert recommended == best_available_at_need(state, board, Settings(), by_id)

@@ -172,7 +172,6 @@ def board_view(
     top: int = 8,
     trials: int = SURVIVAL_TRIALS,
     adp: dict[int, int] | None = None,
-    play=None,
 ) -> list[BoardRow]:
     """The draft-night board: the pick to make, plus the alternatives."""
     by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
@@ -196,10 +195,6 @@ def board_view(
     # for mandatory positions — and a draft board that disagrees with the
     # strategy it was validated as is worse than either alone.
     chosen_id = best_available_at_need(state, projections, settings, by_id)
-    # An adversarial play replaces the pick only when one was supplied, which
-    # happens only in the opt-in mode. The rule is untouched otherwise.
-    if play is not None and any(p.espn_id == play.espn_id for p in available):
-        chosen_id = play.espn_id
     chosen_index = next(
         (i for i, p in enumerate(available) if p.espn_id == chosen_id),
         eligible[0][0],
