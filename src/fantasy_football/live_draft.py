@@ -30,12 +30,14 @@ from .data.espn import fetch_adp, fetch_raw_settings, parse_settings
 from .data.nflverse import load_consensus_board
 from .draft.board_view import board_view
 from .draft.cache import load_bundle, save_bundle
+from .draft.disrupt import DEFAULT_FIRST_ROUND, disruptive_pick
 from .draft.history import pick_training
 from .draft.live import DraftFeed, draft_order, my_team_id, slot_for_team, sync_state
 from .draft.model import fit_pick_model
 from .draft.recommend import roster_limits
 from .draft.script import DEFAULT_TRIALS, forecast, target_survival
 from .draft.state import DraftState, snake_slot_for_pick
+from .draft.strategies import best_available_at_need
 from .projections.build import build
 
 SEASON = 2026
@@ -146,7 +148,9 @@ def _load_or_complain():
     return bundle
 
 
-def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> None:
+def _render(
+    state: DraftState, bundle, settings, by_id, quiet: bool = False, disrupt: bool = False
+) -> None:
     """Show the board. Kept short on purpose — there is a clock running."""
     roster = [by_id[i].position for i in state.my_roster if i in by_id]
     limits = roster_limits(settings)
@@ -172,13 +176,21 @@ def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> 
             print("=" * 72)
             return
 
+    adp = getattr(bundle, "adp", None)
+    play = None
+    if disrupt and state.is_my_turn:
+        current_id = best_available_at_need(state, bundle.projections.projections, settings, by_id)
+        play = disruptive_pick(
+            state, bundle.projections.projections, settings, by_id, adp, current_id=current_id
+        )
     rows = board_view(
         state,
         bundle.projections.projections,
         bundle.pick_model,
         settings,
         trials=LIVE_TRIALS,
-        adp=getattr(bundle, "adp", None),
+        adp=adp,
+        play=play,
     )
     if not rows:
         print("No players left to recommend.")
@@ -189,6 +201,8 @@ def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> 
         best = next((row for row in rows if row.recommended), rows[0])
         print(f"\n  >>> TAKE: {best.player} ({best.position}, {best.team})")
         print(f"      {best.rationale()}")
+        if play is not None and play.espn_id == best.espn_id:
+            print(f"      [{play.label.upper()}] {play.why}")
 
     print(f"\n  {'player':<22} {'pos':<4} {'rank':>5} {'VOR':>6} {'survive':>8} {'ADP':>5}")
     for row in rows[:6]:
@@ -476,7 +490,8 @@ def dryrun() -> int:
     return 0
 
 
-def watch() -> int:
+def watch(argv: list[str] | None = None) -> int:
+    disrupt = "--disrupt" in (argv or [])
     bundle = _load_or_complain()
     if bundle is None:
         return 1
@@ -500,6 +515,11 @@ def watch() -> int:
     feed = DraftFeed(league=league)
     by_id = {p.espn_id: p for p in bundle.projections.projections if p.espn_id is not None}
 
+    if disrupt:
+        print(
+            f"  Adversarial plays ON from round {DEFAULT_FIRST_ROUND}. "
+            "They only ever spend picks worth nothing; the rule is unchanged above that."
+        )
     print("Watching for picks. Draft in ESPN as normal; Ctrl-C to stop.\n")
     last_shown = -1
     consecutive_errors = 0
@@ -529,12 +549,19 @@ def watch() -> int:
             sync_state(state, feed, team_id)
             if feed.complete:
                 print("\nDraft complete.")
-                _render(state, bundle, settings, by_id, quiet=True)
+                _render(state, bundle, settings, by_id, quiet=True, disrupt=disrupt)
                 return 0
 
             if feed.pick_count != last_shown:
                 last_shown = feed.pick_count
-                _render(state, bundle, settings, by_id, quiet=not state.is_my_turn)
+                _render(
+                    state,
+                    bundle,
+                    settings,
+                    by_id,
+                    quiet=not state.is_my_turn,
+                    disrupt=disrupt,
+                )
 
             time.sleep(POLL_SECONDS)
     except KeyboardInterrupt:
@@ -625,11 +652,11 @@ def main(argv: list[str]) -> int:
     if command == "simulate":
         return simulate()
     if command == "watch":
-        return watch()
+        return watch(argv[1:])
     if command == "manual":
         return manual()
     print(
-        f"Unknown command {command!r}. Use: prepare | plan | watch | manual",
+        f"Unknown command {command!r}. Use: prepare | plan | watch [--disrupt] | manual",
         file=sys.stderr,
     )
     return 1
