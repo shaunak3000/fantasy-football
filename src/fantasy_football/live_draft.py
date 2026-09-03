@@ -147,9 +147,7 @@ def _load_or_complain():
     return bundle
 
 
-def _render(
-    state: DraftState, bundle, settings, by_id, quiet: bool = False, disrupt: bool = False
-) -> None:
+def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> None:
     """Show the board. Kept short on purpose — there is a clock running."""
     roster = [by_id[i].position for i in state.my_roster if i in by_id]
     limits = roster_limits(settings)
@@ -194,7 +192,7 @@ def _render(
         best = next((row for row in rows if row.recommended), rows[0])
         print(f"\n  >>> TAKE: {best.player} ({best.position}, {best.team})")
         print(f"      {best.rationale()}")
-        covered = _print_alternative(state, bundle, settings, by_id, adp, best, disrupt)
+        covered = _print_alternative(state, bundle, settings, by_id, adp, best)
 
     print(f"\n  {'player':<22} {'pos':<4} {'rank':>5} {'VOR':>6} {'survive':>8} {'ADP':>5}")
     for row in rows[:6]:
@@ -213,7 +211,7 @@ def _render(
     print("=" * 72)
 
 
-def _print_alternative(state, bundle, settings, by_id, adp, best, disrupt: bool) -> bool:
+def _print_alternative(state, bundle, settings, by_id, adp, best) -> bool:
     """Offer the adversarial play as an alternative, never as the pick.
 
     The recommendation above always comes from the rule that won the rehearsal.
@@ -222,7 +220,7 @@ def _print_alternative(state, bundle, settings, by_id, adp, best, disrupt: bool)
     90-second clock a silent substitution is the one thing you cannot audit.
     Naming it, with its reason, leaves the choice where it belongs.
     """
-    if not disrupt or best.espn_id is None:
+    if best.espn_id is None:
         return False
     play = disruptive_pick(
         state,
@@ -516,7 +514,10 @@ def dryrun() -> int:
 
 
 def watch(argv: list[str] | None = None) -> int:
-    disrupt = "--disrupt" in (argv or [])
+    # --disrupt used to gate these; they are advisory and now always on. Still
+    # accepted so muscle memory does not produce an error against a draft clock.
+    if "--disrupt" in (argv or []):
+        print("  (--disrupt is now the default; the flag is no longer needed.)")
     bundle = _load_or_complain()
     if bundle is None:
         return 1
@@ -540,11 +541,10 @@ def watch(argv: list[str] | None = None) -> int:
     feed = DraftFeed(league=league)
     by_id = {p.espn_id: p for p in bundle.projections.projections if p.espn_id is not None}
 
-    if disrupt:
-        print(
-            f"  Adversarial plays shown from round {DEFAULT_FIRST_ROUND} as an ALT line. "
-            "They never change the recommendation - you choose."
-        )
+    print(
+        f"  From round {DEFAULT_FIRST_ROUND} an ALT line offers an adversarial alternative. "
+        "It never changes the recommendation - you choose."
+    )
     print("Watching for picks. Draft in ESPN as normal; Ctrl-C to stop.\n")
     last_shown = -1
     consecutive_errors = 0
@@ -574,19 +574,12 @@ def watch(argv: list[str] | None = None) -> int:
             sync_state(state, feed, team_id)
             if feed.complete:
                 print("\nDraft complete.")
-                _render(state, bundle, settings, by_id, quiet=True, disrupt=disrupt)
+                _render(state, bundle, settings, by_id, quiet=True)
                 return 0
 
             if feed.pick_count != last_shown:
                 last_shown = feed.pick_count
-                _render(
-                    state,
-                    bundle,
-                    settings,
-                    by_id,
-                    quiet=not state.is_my_turn,
-                    disrupt=disrupt,
-                )
+                _render(state, bundle, settings, by_id, quiet=not state.is_my_turn)
 
             time.sleep(POLL_SECONDS)
     except KeyboardInterrupt:
@@ -681,7 +674,7 @@ def main(argv: list[str]) -> int:
     if command == "manual":
         return manual()
     print(
-        f"Unknown command {command!r}. Use: prepare | plan | watch [--disrupt] | manual",
+        f"Unknown command {command!r}. Use: prepare | plan | watch | manual",
         file=sys.stderr,
     )
     return 1

@@ -1,11 +1,14 @@
 """Optional adversarial plays for the back half of the draft.
 
-Off by default, and **advisory even when on**. Six cleverer strategies lost the
-rehearsal and nothing here has been scored against it, so these never replace the
-recommendation — `watch --disrupt` prints the play as an ALT line beside the rule's
-pick, with its reason, and you choose. An untested idea does not get the same
-standing as a measured one, and under a 90-second clock a silent substitution is
-the one thing you cannot audit.
+**Advisory, always.** Six cleverer strategies lost the rehearsal and nothing here
+has been scored against it, so these never replace the recommendation — `watch`
+prints the play as an ALT line beside the rule's pick, with its reason, and you
+choose. An untested idea does not get the same standing as a measured one, and
+under a 90-second clock a silent substitution is the one thing you cannot audit.
+
+Shown by default precisely because it cannot decide anything. A flag gated this
+while it could still override; once it could only inform, the flag was one more
+thing to remember at 7:35 PM for no protection.
 
 What makes it defensible at all is a measurement rather than a theory. Replaying
 all eight slots, **7.1 of our 16 picks land on a player at or below replacement**,
