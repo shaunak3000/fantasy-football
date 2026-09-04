@@ -649,10 +649,15 @@ def _resolve(token: str, shortlist: list, by_name: dict, state):
     """A shortlist number, or a name fragment. Numbers are checked first."""
     if token.isdigit():
         index = int(token) - 1
-        if 0 <= index < len(shortlist):
-            return shortlist[index]
-        print(f"  {token} is not on the shortlist")
-        return None
+        if not 0 <= index < len(shortlist):
+            print(f"  {token} is not on the shortlist")
+            return None
+        candidate = shortlist[index]
+        # The snapshot can name someone taken earlier in this same burst.
+        if candidate.espn_id in state.drafted_set:
+            print(f"  {token} ({candidate.player}) is already drafted - skipped")
+            return None
+        return candidate
 
     matches = [p for name, p in by_name.items() if token.lower() in name]
     available = [p for p in matches if p.espn_id not in state.drafted_set]
@@ -726,6 +731,12 @@ def manual() -> int:
         # One line may carry a burst of picks — catching up after looking away is
         # the whole reason manual mode is bearable, and retyping them one prompt
         # at a time against a running clock is not.
+        #
+        # Every number in that burst is read off the ONE list printed above, so
+        # they all resolve against that snapshot. Renumbering between them looked
+        # tidier and silently recorded the wrong players: taking #1 shifts #2 onto
+        # a different name, so "1 2 3" entered from the screen produced picks 1, 3
+        # and 5. Wrong state, entered confidently, with no error.
         for token in (t.strip() for t in entry.replace(",", " ").split()):
             if not token or state.is_complete:
                 continue
@@ -734,8 +745,6 @@ def manual() -> int:
                 continue
             state.record(chosen.espn_id, mine=state.is_my_turn)
             print(f"  recorded {chosen.player} ({chosen.position})")
-            # The shortlist is stale the moment anything is taken from it.
-            shortlist = _shortlist(state, projections)
 
     print("\nDraft complete.")
     return 0

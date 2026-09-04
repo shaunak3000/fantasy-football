@@ -198,3 +198,19 @@ class TestShortlist:
         a = player(1, "Alpha", "RB", "AAA", 1)
         state = DraftState(team_count=8, rounds=16, my_slot=1)
         assert _resolve("alph", [], {"alpha": a}, state) is a
+
+
+class TestBurstEntry:
+    """Numbers in one burst are read off one printed list and must resolve to it."""
+
+    def test_a_taken_shortlist_entry_is_refused_not_reused(self):
+        from fantasy_football.live_draft import _resolve
+
+        a = player(1, "Alpha", "RB", "AAA", 1)
+        b = player(2, "Beta", "WR", "BBB", 2)
+        state = DraftState(team_count=8, rounds=16, my_slot=1)
+        state.record(a.espn_id)
+        # Renumbering between tokens used to slide entry 2 onto a different name;
+        # against a stale snapshot the answer is "already gone", never a guess.
+        assert _resolve("1", [a, b], {}, state) is None
+        assert _resolve("2", [a, b], {}, state) is b
