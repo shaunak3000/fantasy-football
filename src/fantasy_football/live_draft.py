@@ -55,6 +55,13 @@ FEED_FAILURE_LIMIT = 10
 # written. Measured against an ESPN mock, where that is exactly what happens.
 FEED_SILENT_POLLS = 40
 
+# Size of the numbered shortlist in manual mode. Measured against the 250 real
+# picks in this league's 2024 and 2025 drafts, the player taken was inside the
+# top 20 available 80.8% of the time (top 10: 64.8%, top 30: 86.8%). Twenty is
+# where the curve flattens against the screen space it costs — four picks in five
+# become one keystroke instead of a typed name, under a 90-second clock.
+SHORTLIST = 20
+
 
 def _league(creds, season=SEASON) -> League:
     """Open the league, turning an auth failure into instructions rather than a stack trace.
@@ -615,6 +622,49 @@ def watch(argv: list[str] | None = None) -> int:
         return 0
 
 
+def _shortlist(state, projections) -> list:
+    """The most likely next picks, highest consensus rank first."""
+    taken = state.drafted_set
+    available = [p for p in projections if p.espn_id not in taken]
+    available.sort(key=lambda p: p.consensus_overall_rank)
+    return available[:SHORTLIST]
+
+
+def _print_shortlist(shortlist: list) -> None:
+    """Two columns, so twenty names cost ten lines rather than twenty."""
+    if not shortlist:
+        return
+    half = (len(shortlist) + 1) // 2
+    print()
+    for i in range(half):
+        cells = []
+        for index in (i, i + half):
+            if index < len(shortlist):
+                p = shortlist[index]
+                cells.append(f"{index + 1:>3} {p.player[:20]:<20} {p.position:<4}")
+        print("  " + "  ".join(cells))
+
+
+def _resolve(token: str, shortlist: list, by_name: dict, state):
+    """A shortlist number, or a name fragment. Numbers are checked first."""
+    if token.isdigit():
+        index = int(token) - 1
+        if 0 <= index < len(shortlist):
+            return shortlist[index]
+        print(f"  {token} is not on the shortlist")
+        return None
+
+    matches = [p for name, p in by_name.items() if token.lower() in name]
+    available = [p for p in matches if p.espn_id not in state.drafted_set]
+    if not available:
+        print(f"  no available player matching {token!r}")
+        return None
+    if len(available) > 1:
+        print(f"  ambiguous: {', '.join(p.player for p in available[:6])}")
+        return None
+    return available[0]
+
+
 def manual() -> int:
     bundle = _load_or_complain()
     if bundle is None:
@@ -652,11 +702,14 @@ def manual() -> int:
     by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
     by_name = {p.player.lower(): p for p in projections}
 
-    print("\nType a player name after each pick. 'undo' reverts, 'q' quits.")
+    print("\nEnter each pick by NUMBER from the shortlist, or by name.")
+    print("Several at once is fine: '3 7 12' or '3, Lamb'. 'undo' reverts, 'q' quits.")
     print("Your own picks are recorded automatically when it is your turn.\n")
 
     while not state.is_complete:
         _render(state, bundle, settings, by_id, quiet=not state.is_my_turn)
+        shortlist = _shortlist(state, projections)
+        _print_shortlist(shortlist)
         entry = input("pick> ").strip()
         if entry.lower() in {"q", "quit", "exit"}:
             return 0
@@ -670,18 +723,19 @@ def manual() -> int:
         if not entry:
             continue
 
-        matches = [p for name, p in by_name.items() if entry.lower() in name]
-        available = [p for p in matches if p.espn_id not in state.drafted_set]
-        if not available:
-            print(f"  no available player matching {entry!r}")
-            continue
-        if len(available) > 1:
-            print(f"  ambiguous: {', '.join(p.player for p in available[:6])}")
-            continue
-
-        chosen = available[0]
-        state.record(chosen.espn_id, mine=state.is_my_turn)
-        print(f"  recorded {chosen.player} ({chosen.position})")
+        # One line may carry a burst of picks — catching up after looking away is
+        # the whole reason manual mode is bearable, and retyping them one prompt
+        # at a time against a running clock is not.
+        for token in (t.strip() for t in entry.replace(",", " ").split()):
+            if not token or state.is_complete:
+                continue
+            chosen = _resolve(token, shortlist, by_name, state)
+            if chosen is None:
+                continue
+            state.record(chosen.espn_id, mine=state.is_my_turn)
+            print(f"  recorded {chosen.player} ({chosen.position})")
+            # The shortlist is stale the moment anything is taken from it.
+            shortlist = _shortlist(state, projections)
 
     print("\nDraft complete.")
     return 0

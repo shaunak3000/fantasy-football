@@ -174,3 +174,27 @@ class TestSilentFeedThreshold:
         # ESPN allows 90 seconds a pick; the alarm has to outlast that or it will
         # fire every draft before anyone has done anything wrong.
         assert FEED_SILENT_POLLS * POLL_SECONDS > 90
+
+
+class TestShortlist:
+    def test_numbers_resolve_to_shortlist_entries(self):
+        from fantasy_football.live_draft import _resolve
+
+        a = player(1, "Alpha", "RB", "AAA", 1)
+        b = player(2, "Beta", "WR", "BBB", 2)
+        state = DraftState(team_count=8, rounds=16, my_slot=1)
+        assert _resolve("2", [a, b], {}, state) is b
+
+    def test_number_off_the_end_is_refused_not_guessed(self):
+        from fantasy_football.live_draft import _resolve
+
+        a = player(1, "Alpha", "RB", "AAA", 1)
+        state = DraftState(team_count=8, rounds=16, my_slot=1)
+        assert _resolve("9", [a], {}, state) is None
+
+    def test_names_still_work_alongside_numbers(self):
+        from fantasy_football.live_draft import _resolve
+
+        a = player(1, "Alpha", "RB", "AAA", 1)
+        state = DraftState(team_count=8, rounds=16, my_slot=1)
+        assert _resolve("alph", [], {"alpha": a}, state) is a
