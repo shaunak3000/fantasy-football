@@ -214,3 +214,31 @@ class TestBurstEntry:
         # against a stale snapshot the answer is "already gone", never a guess.
         assert _resolve("1", [a, b], {}, state) is None
         assert _resolve("2", [a, b], {}, state) is b
+
+
+class TestUnknownPick:
+    """A pick we cannot name must still advance the count."""
+
+    def test_placeholder_keeps_pick_numbering_honest(self):
+        from fantasy_football.live_draft import UNKNOWN_PICK_BASE
+
+        state = DraftState(team_count=8, rounds=16, my_slot=3)
+        state.record(101)
+        before = state.current_pick
+        state.record(UNKNOWN_PICK_BASE - len(state.drafted))
+        assert state.current_pick == before + 1
+
+    def test_placeholders_are_distinct(self):
+        from fantasy_football.live_draft import UNKNOWN_PICK_BASE
+
+        state = DraftState(team_count=8, rounds=16, my_slot=3)
+        for _ in range(4):
+            state.record(UNKNOWN_PICK_BASE - len(state.drafted))
+        assert len(set(state.drafted)) == 4
+
+    def test_unknown_ids_never_collide_with_real_players(self):
+        from fantasy_football.live_draft import UNKNOWN_PICK_BASE
+
+        # ESPN player ids are positive, so a negative base cannot mark a real
+        # player as drafted and remove him from the board by accident.
+        assert UNKNOWN_PICK_BASE < 0

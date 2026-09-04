@@ -62,6 +62,14 @@ FEED_SILENT_POLLS = 40
 # become one keystroke instead of a typed name, under a 90-second clock.
 SHORTLIST = 20
 
+# Ids for picks we cannot name. Replaying 2024 and 2025, 7-9% of picks were not
+# on our board at all — nearly all of them late-round defences, whose ESPN naming
+# does not always match. Being unable to record such a pick would be far worse
+# than not knowing who it was: every later pick number, gap and survival estimate
+# is derived from how many players have gone, so one unrecordable pick puts the
+# board permanently a step behind the room. A placeholder keeps the count honest.
+UNKNOWN_PICK_BASE = -1000
+
 
 def _league(creds, season=SEASON) -> League:
     """Open the league, turning an auth failure into instructions rather than a stack trace.
@@ -708,7 +716,8 @@ def manual() -> int:
     by_name = {p.player.lower(): p for p in projections}
 
     print("\nEnter each pick by NUMBER from the shortlist, or by name.")
-    print("Several at once is fine: '3 7 12' or '3, Lamb'. 'undo' reverts, 'q' quits.")
+    print("Several at once is fine: '3 7 12' or '3, Lamb'.")
+    print("'skip' records a pick you cannot name (late defences), 'undo' reverts, 'q' quits.")
     print("Your own picks are recorded automatically when it is your turn.\n")
 
     while not state.is_complete:
@@ -718,12 +727,23 @@ def manual() -> int:
         entry = input("pick> ").strip()
         if entry.lower() in {"q", "quit", "exit"}:
             return 0
+        if entry.lower() in {"skip", "?", "x"}:
+            # Somebody took a player we cannot identify. Record the fact of the
+            # pick without the identity, so the count stays right.
+            placeholder = UNKNOWN_PICK_BASE - len(state.drafted)
+            state.record(placeholder, mine=state.is_my_turn)
+            print(
+                f"  recorded an unknown pick at {state.current_pick - 1} "
+                "(count stays in sync; that player stays on our board)"
+            )
+            continue
         if entry.lower() == "undo":
             if state.drafted:
                 removed = state.drafted.pop()
                 if removed in state.my_roster:
                     state.my_roster.remove(removed)
-                print(f"  removed {by_id[removed].player if removed in by_id else removed}")
+                label = by_id[removed].player if removed in by_id else "unknown pick"
+                print(f"  removed {label}")
             continue
         if not entry:
             continue
