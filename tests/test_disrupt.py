@@ -163,3 +163,14 @@ class TestAdvisoryOnly:
         rows = board_view(state, board, model, Settings(), adp=hostile)
         recommended = next(r.espn_id for r in rows if r.recommended)
         assert recommended == best_available_at_need(state, board, Settings(), by_id)
+
+
+class TestSilentFeedThreshold:
+    """The alarm must not trip on a slow opening pick."""
+
+    def test_threshold_exceeds_one_pick_clock(self):
+        from fantasy_football.live_draft import FEED_SILENT_POLLS, POLL_SECONDS
+
+        # ESPN allows 90 seconds a pick; the alarm has to outlast that or it will
+        # fire every draft before anyone has done anything wrong.
+        assert FEED_SILENT_POLLS * POLL_SECONDS > 90

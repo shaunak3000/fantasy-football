@@ -1,8 +1,16 @@
 """Live draft feed.
 
-ESPN fills in a pre-allocated list of 128 pick slots as the draft runs, so the
-whole live problem reduces to polling one endpoint and noticing which slots have
-acquired a player. You draft in ESPN as normal; this watches.
+ESPN pre-allocates 128 pick slots and is expected to fill in `playerId` as picks
+are made, so the whole live problem reduces to polling one endpoint and noticing
+which slots have acquired a player. You draft in ESPN as normal; this watches.
+
+**Measured caveat (2026-09-04):** ESPN *mock* drafts never populate these slots.
+A mock with `inProgress: True` and picks visibly landing in the draft room still
+reports every slot as `playerId: -1`, and `mRoster`, `mTeam` and
+`kona_league_communication` are all equally empty — the mock draft room is served
+over a channel the REST API does not see. Whether a real league draft behaves the
+same way is unverified, which is why `watch` now raises a stall alarm rather than
+sitting silently on pick 1, and why `manual` exists.
 
 Everything here is defensive on purpose. A draft happens once, under a 90-second
 clock, and a tool that throws an exception in round 4 is worse than no tool at

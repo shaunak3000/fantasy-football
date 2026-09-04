@@ -48,6 +48,13 @@ LIVE_TRIALS = 250
 # seconds of transient error is normal; half a minute of it is not.
 FEED_FAILURE_LIMIT = 10
 
+# Polls to allow with the draft reported in progress and not one pick visible
+# before declaring the feed silent. The clock is 90 seconds a pick, so a slow
+# opening pick is normal and must not trip this; two minutes of an active draft
+# with a completely empty board is not normal, it is the REST view never being
+# written. Measured against an ESPN mock, where that is exactly what happens.
+FEED_SILENT_POLLS = 40
+
 
 def _league(creds, season=SEASON) -> League:
     """Open the league, turning an auth failure into instructions rather than a stack trace.
@@ -548,6 +555,8 @@ def watch(argv: list[str] | None = None) -> int:
     print("Watching for picks. Draft in ESPN as normal; Ctrl-C to stop.\n")
     last_shown = -1
     consecutive_errors = 0
+    silent_polls = 0
+    warned_silent = False
     try:
         while True:
             feed.poll()
@@ -570,6 +579,25 @@ def watch(argv: list[str] | None = None) -> int:
                     print("!" * 72 + "\n")
             else:
                 consecutive_errors = 0
+
+            # The draft is running and the feed says nobody has picked. Early on
+            # that is just a slow first pick; sustained, it means ESPN is not
+            # writing picks where we can read them, and the board will sit on
+            # pick 1 all night looking exactly like a quiet draft.
+            if feed.in_progress and not feed.picks:
+                silent_polls += 1
+                if silent_polls >= FEED_SILENT_POLLS and not warned_silent:
+                    warned_silent = True
+                    print("\n" + "!" * 72)
+                    print("  DRAFT IS RUNNING BUT THE FEED SHOWS NO PICKS.")
+                    print("  ESPN is not publishing this draft to the API - the board")
+                    print("  below will never advance. This is how mock drafts behave.")
+                    print("\n  Switch now:  Ctrl-C, then")
+                    print("      uv run python -m fantasy_football.live_draft manual")
+                    print("  and type each pick as it happens. Nothing is lost.")
+                    print("!" * 72 + "\n")
+            else:
+                silent_polls = 0
 
             sync_state(state, feed, team_id)
             if feed.complete:
