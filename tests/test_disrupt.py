@@ -242,3 +242,33 @@ class TestUnknownPick:
         # ESPN player ids are positive, so a negative base cannot mark a real
         # player as drafted and remove him from the board by accident.
         assert UNKNOWN_PICK_BASE < 0
+
+
+class TestSurnameMatching:
+    def test_exact_surname_beats_a_substring_collision(self):
+        from fantasy_football.live_draft import _resolve
+
+        lamar = player(1, "Lamar Jackson", "QB", "BAL", 31)
+        jags = player(2, "Jacksonville Jaguars", "D/ST", "JAC", 180)
+        by_name = {p.player.lower(): p for p in (lamar, jags)}
+        state = DraftState(team_count=8, rounds=16, my_slot=1)
+        assert _resolve("jackson", [], by_name, state) is lamar
+
+    def test_generational_suffix_does_not_hide_the_surname(self):
+        from fantasy_football.live_draft import _resolve
+
+        pitts = player(1, "Kyle Pitts Sr.", "TE", "ATL", 77)
+        steelers = player(2, "Pittsburgh Steelers", "D/ST", "PIT", 186)
+        by_name = {p.player.lower(): p for p in (pitts, steelers)}
+        state = DraftState(team_count=8, rounds=16, my_slot=1)
+        assert _resolve("pitts", [], by_name, state) is pitts
+
+    def test_a_genuinely_shared_surname_is_still_refused(self):
+        """Two real players named Wilson must never be guessed between."""
+        from fantasy_football.live_draft import _resolve
+
+        a = player(1, "Garrett Wilson", "WR", "NYJ", 30)
+        b = player(2, "Michael Wilson", "WR", "ARI", 88)
+        by_name = {p.player.lower(): p for p in (a, b)}
+        state = DraftState(team_count=8, rounds=16, my_slot=1)
+        assert _resolve("wilson", [], by_name, state) is None

@@ -37,6 +37,7 @@ from .draft.model import fit_pick_model
 from .draft.recommend import roster_limits
 from .draft.script import DEFAULT_TRIALS, forecast, target_survival
 from .draft.state import DraftState, snake_slot_for_pick
+from .draft.strategies import best_available_at_need
 from .projections.build import build
 
 SEASON = 2026
@@ -214,6 +215,7 @@ def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> 
         best = next((row for row in rows if row.recommended), rows[0])
         print(f"\n  >>> TAKE: {best.player} ({best.position}, {best.team})")
         print(f"      {best.rationale()}")
+        _print_second_of_pair(state, bundle, settings, by_id, best)
         covered = _print_alternative(state, bundle, settings, by_id, adp, best)
 
     print(f"\n  {'player':<22} {'pos':<4} {'rank':>5} {'VOR':>6} {'survive':>8} {'ADP':>5}")
@@ -231,6 +233,38 @@ def _render(state: DraftState, bundle, settings, by_id, quiet: bool = False) -> 
         _print_wait_hint(rows, state)
     print(f"\n  still need: {', '.join(still_need) if still_need else 'nothing'}")
     print("=" * 72)
+
+
+def _print_second_of_pair(state, bundle, settings, by_id, best) -> None:
+    """At the turn you pick twice with nobody in between — show both at once.
+
+    From slot 1 or 8 the two picks are a single decision: nothing can change
+    between them, so waiting to be told the second one after entering the first
+    spends a round trip for information already knowable. The second is computed
+    against a board with the first already taken, which is what makes it the
+    correct answer rather than the runner-up.
+    """
+    if state.picks_until_my_next() != 0 or best.espn_id is None:
+        return
+
+    ahead = DraftState(
+        team_count=state.team_count,
+        rounds=state.rounds,
+        my_slot=state.my_slot,
+        drafted=list(state.drafted),
+        my_roster=list(state.my_roster),
+    )
+    ahead.record_my_pick(best.espn_id)
+
+    second_id = best_available_at_need(ahead, bundle.projections.projections, settings, by_id)
+    second = by_id.get(second_id)
+    if second is None:
+        return
+    print(f"  >>> THEN: {second.player} ({second.position}, {second.team})")
+    print(
+        f"      you pick {state.current_pick} and {state.current_pick + 1} back to back; "
+        f"consensus #{second.consensus_overall_rank}."
+    )
 
 
 def _print_alternative(state, bundle, settings, by_id, adp, best) -> bool:
@@ -653,6 +687,17 @@ def _print_shortlist(shortlist: list) -> None:
         print("  " + "  ".join(cells))
 
 
+# Generational suffixes are part of the printed name but never what anyone types.
+_NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
+def _surname(full_name: str) -> str:
+    parts = [w.strip(".") for w in full_name.split() if w.strip(".")]
+    while len(parts) > 1 and parts[-1].lower() in _NAME_SUFFIXES:
+        parts.pop()
+    return parts[-1].lower() if parts else ""
+
+
 def _resolve(token: str, shortlist: list, by_name: dict, state):
     """A shortlist number, or a name fragment. Numbers are checked first."""
     if token.isdigit():
@@ -667,13 +712,30 @@ def _resolve(token: str, shortlist: list, by_name: dict, state):
             return None
         return candidate
 
-    matches = [p for name, p in by_name.items() if token.lower() in name]
+    needle = token.lower()
+
+    # An exact surname beats a substring, and that is not a nicety: typed against
+    # a clock, "jackson" otherwise also matches Jacksonville Jaguars, "pitts"
+    # matches Pittsburgh Steelers and "nix" matches Penix. Those collisions are
+    # spurious — nobody typing a surname means a team defence — and each one costs
+    # a retype at exactly the wrong moment.
+    exact = [
+        p
+        for name, p in by_name.items()
+        if _surname(name) == needle and p.espn_id not in state.drafted_set
+    ]
+    if len(exact) == 1:
+        return exact[0]
+
+    matches = [p for name, p in by_name.items() if needle in name]
     available = [p for p in matches if p.espn_id not in state.drafted_set]
     if not available:
         print(f"  no available player matching {token!r}")
         return None
     if len(available) > 1:
-        print(f"  ambiguous: {', '.join(p.player for p in available[:6])}")
+        shown = ", ".join(p.player for p in available[:6])
+        print(f"  ambiguous: {shown}")
+        print("    type more of the name, e.g. the first name too")
         return None
     return available[0]
 
