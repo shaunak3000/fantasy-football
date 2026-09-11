@@ -8,7 +8,7 @@ A full-season manager for an ESPN fantasy league, built around one rule: **no st
 
 | | measured result |
 |---|---|
-| **Weekly lineups** | **+200 points a season** (+15.4/week), 74% of the achievable ceiling, beating all 8 managers in a 2025 backtest |
+| **Weekly lineups** | Legal by construction, never starts a player who is out or on bye. The in-season scoring edge is **unmeasured** — see the note below |
 | **Draft** | +81 points a season over the humans, from a rule that fits on one line |
 | **Waivers / trades** | advisory — priced in championship probability, not yet validated |
 
@@ -59,7 +59,11 @@ of historical data into `data/cache/` — expect one slow run, then it is cached
 
 **Drafting** takes the highest-ranked player at a position you still need. That is the entire rule, and it won a bench of six strategies — including a Monte Carlo lookahead board that lost by 241 points at 5.2 standard errors. Converting consensus rank into a derived value estimate made things *worse*, because expert rank already encodes injury and depth-chart information a curve cannot recover. The simulation still runs, but only to report who is likely to be gone by your next pick; `board_view` separates information from authority deliberately.
 
-**Lineups** are solved as an assignment problem, so an illegal lineup is impossible by construction. This is where the real edge is: the league leaves 272 points a season on the bench, and simply starting the right players recovers three quarters of it.
+**Lineups** are solved as an assignment problem, so an illegal lineup is impossible by construction.
+
+This repo previously claimed the optimizer was worth +200 points a season, beating all eight managers. **That claim has been withdrawn.** It came from a replay that mapped ESPN's `defaultPositionId` through the lineup-slot enumeration rather than the player-position one, which silently dropped every quarterback, receiver and kicker and relabelled tight ends as receivers. It also compared against a lineup ESPN cannot supply: a request for a past week returns the roster and slots *as they stand today*, so the "manager" baseline was the lineup they finished with, scored against every week of the season.
+
+Measured against what the managers really scored, from the scoreboard itself, the projection-maximizing lineup is worth **+0.5 points a week across eight teams, with a spread of 3.7** — indistinguishable from zero, and that comparison already flatters the optimizer. The honest position is that the in-season edge is unmeasured rather than established; settling it needs weekly roster snapshots captured live, which no replay can recover. See `PLAN.md` step 8.
 
 **Roster moves** are priced as a change in P(finishing first), simulated through the actual playoff bracket. In a league where 4 of 8 qualify and the title is two single-game coin flips, points and championships genuinely diverge.
 

@@ -28,6 +28,16 @@ NON_STARTABLE_SLOTS = frozenset({"BE", "IR", "ER", "Rookie", ""})
 
 # ESPN's player-position enumeration, which is *not* the lineup-slot enumeration
 # in POSITION_MAP. Team defenses happen to be 16 in both.
+#
+# The coincidence at 16 is what makes confusing the two so dangerous: the
+# scoring engine only ever branches on D/ST, so it is correct under either
+# reading and its reconciliation gate passes regardless. Anything that maps a
+# `defaultPositionId` to a *name*, though, gets a silently wrong answer — the
+# slot enumeration reads 1 as TQB, 3 as RB/WR and 5 as WR/TE, so quarterbacks,
+# receivers and kickers vanish and tight ends come back labelled as receivers.
+# That is not hypothetical; it is what `check_lineups` and `check_optimizer`
+# were doing, and it halved every roster they measured.
+PLAYER_POSITION_BY_ID = {1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST"}
 DST_POSITION_ID = 16
 
 
@@ -319,3 +329,94 @@ def fetch_adp(league: League, limit: int = ADP_FETCH_LIMIT) -> dict[int, int]:
 
     drafted.sort()
     return {player_id: rank for rank, (_, player_id) in enumerate(drafted, start=1)}
+
+
+# How many players to pull weekly projections for. The league rosters 128 and
+# the waiver wire that matters is the top of what is left, so several hundred
+# covers every player any recommendation could name.
+WEEKLY_FETCH_LIMIT = 800
+
+
+@dataclass(frozen=True)
+class WeeklyProjection:
+    """ESPN's own published projection for one player in one week."""
+
+    espn_id: int
+    name: str
+    position: str | None
+    points: float
+    injury_status: str | None
+
+    @property
+    def unavailable(self) -> bool:
+        """Whether this player is certain, or nearly certain, not to play.
+
+        Starting someone who scores zero is the same mistake as starting a
+        player on bye, and costs the same. OUT and INJURY_RESERVE are settled;
+        DOUBTFUL is around a one-in-four chance to play, which is close enough
+        to zero that benching is right whenever an alternative exists.
+
+        QUESTIONABLE is deliberately left alone — those players mostly play,
+        and zeroing them would bench half a roster every week. Note that team
+        defences report NORMAL rather than ACTIVE, so a whitelist of "healthy"
+        statuses would silently bench every defence in the league.
+        """
+        return (self.injury_status or "").upper() in UNAVAILABLE_INJURY_STATUSES
+
+
+UNAVAILABLE_INJURY_STATUSES = frozenset({"OUT", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION"})
+
+
+def fetch_weekly_projections(
+    league: League, week: int, limit: int = WEEKLY_FETCH_LIMIT
+) -> dict[int, WeeklyProjection]:
+    """ESPN's published projections for a single week, keyed by player id.
+
+    This is the input the optimizer was actually validated on — `check_optimizer`
+    replays finished seasons using exactly these numbers. The season-long rank
+    curves are a different instrument fit for a different horizon: they answer
+    "how good is this player" rather than "what will he do on Sunday", and they
+    cannot see a matchup, a depth-chart change, or a player who was ruled out an
+    hour ago. Weekly decisions belong on weekly projections.
+
+    One request covers rostered players and free agents alike, and carries the
+    injury status and the player-position id alongside, so nothing downstream
+    has to make a second call to find out whether a player is even playing.
+    """
+    body = {
+        "players": {
+            "limit": limit,
+            "sortPercOwned": {"sortPriority": 1, "sortAsc": False, "value": None},
+        }
+    }
+    data = league.espn_request.league_get(
+        params={"view": "kona_player_info", "scoringPeriodId": week},
+        headers={"x-fantasy-filter": json.dumps(body)},
+    )
+
+    projections: dict[int, WeeklyProjection] = {}
+    for entry in data.get("players", []):
+        player = entry.get("player") or {}
+        player_id = player.get("id")
+        if player_id is None:
+            continue
+        block = next(
+            (
+                s
+                for s in player.get("stats", [])
+                if s.get("statSourceId") == PROJECTED_STAT_SOURCE
+                and s.get("statSplitTypeId") == WEEKLY_SPLIT
+                and s.get("scoringPeriodId") == week
+            ),
+            None,
+        )
+        if block is None:
+            continue
+        projections[int(player_id)] = WeeklyProjection(
+            espn_id=int(player_id),
+            name=player.get("fullName", "?"),
+            position=PLAYER_POSITION_BY_ID.get(player.get("defaultPositionId", -1)),
+            points=float(block.get("appliedTotal") or 0.0),
+            injury_status=player.get("injuryStatus"),
+        )
+    return projections

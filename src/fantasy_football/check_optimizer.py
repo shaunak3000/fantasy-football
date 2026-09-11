@@ -13,6 +13,22 @@ maximizing projected points would have started, and what maximizing the chance
 of beating *that week's actual opponent* would have started. The third is the
 one that tests whether risk-adjustment is worth anything, and it is judged on
 games won rather than points, because that is what it optimizes.
+
+**The "manager" column is not what the manager started, and the gain is not an
+edge.** ESPN does not retain historical weekly lineups: a request for week 3
+returns the roster and lineup slots as they stand today, identical for every
+week. So this replays the lineup each manager *finished* with against every week
+of the season, which is systematically worse than what they really did.
+
+Measured against real scoreboard totals instead — `pointsByScoringPeriod`, which
+is what the teams actually scored — the projection-maximizing lineup was worth
++0.5 points a week in 2025 across the eight teams, with a spread of 3.7. That is
+indistinguishable from zero, and it already flatters the optimizer, which gets
+to use each manager's final roster in every week.
+
+Treat the number this prints as an upper bound on an unmeasured quantity. The
+test that would settle it needs weekly roster snapshots captured live; no replay
+against this API can recover them.
 """
 
 from __future__ import annotations
@@ -25,6 +41,7 @@ from espn_api.football import League
 from .config import load_credentials
 from .data.espn import (
     ACTUAL_STAT_SOURCE,
+    PLAYER_POSITION_BY_ID,
     PROJECTED_STAT_SOURCE,
     WEEKLY_SPLIT,
     fetch_raw_settings,
@@ -34,7 +51,6 @@ from .lineup.optimizer import optimize
 from .projections.scoring import ScoringEngine
 
 BENCH_SLOTS = {20, 21, 24}
-POSITION_BY_ID = {0: "QB", 2: "RB", 4: "WR", 6: "TE", 16: "D/ST", 17: "K"}
 
 # Weekly volatility relative to production, measured per position in
 # `check_weekly`. Tight ends swing furthest for what they score; quarterbacks
@@ -91,7 +107,7 @@ def _collect_week(payload: dict, week: int, engine) -> dict[int, list[WeekPlayer
         players: list[WeekPlayer] = []
         for entry in team.get("roster", {}).get("entries", []):
             raw = entry.get("playerPoolEntry", {}).get("player", {})
-            position = POSITION_BY_ID.get(raw.get("defaultPositionId", -1))
+            position = PLAYER_POSITION_BY_ID.get(raw.get("defaultPositionId", -1))
             if position is None:
                 continue
 

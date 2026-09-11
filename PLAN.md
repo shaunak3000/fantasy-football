@@ -13,7 +13,11 @@ League "Rice Ball" (id 1815614957), verified against the API on 2026-08-06:
 - **8 teams**, snake draft, no keepers, waiver priority (no FAAB)
 - **Full PPR**, 4pt passing TD, 0.04/passing yard, 0.1/rushing and receiving yard
 - Starters (9): 1 QB, 2 RB, 2 WR, 1 TE, 1 FLEX (RB/WR/TE), 1 D/ST, 1 K; 7 bench, 2 IR
-- 13-week regular season, **4 of 8 make the playoffs**, 1-week playoff matchups
+- **14-week** regular season in 2026, **4 of 8 make the playoffs**, 1-week playoff matchups.
+  (2025 ran 13 weeks; ESPN reports `matchupPeriodCount` 13 for 2025 and 14 for 2026, and the
+  2026 schedule really does carry 14 rounds of regular-season matchups. Everything reads this
+  from the API, so nothing needed changing — but the "13-week" figure repeated elsewhere in
+  this plan was stale, and is corrected here.)
 
 Three properties of this format drive the modeling and are easy to get wrong:
 
@@ -30,8 +34,8 @@ Three properties of this format drive the modeling and are easy to get wrong:
 
 ## Action items
 
-- [ ] 1. **Scaffold** — uv + Python 3.12, `src/fantasy_football/{data,projections,draft,lineup,transactions,season}`, `.env.example`, gitleaks pre-commit, pytest, ruff.
-- [ ] 2. **ESPN client** (`data/espn.py`) — authenticated `espn-api` wrapper reading league settings, rosters, free agents, schedule, and prior-season draft results. Everything downstream reads scoring rules, roster slots, league size, and keeper rules from here; nothing about the league is hardcoded. Snapshot responses to `data/cache/` so the whole test suite runs offline.
+- [x] 1. **Scaffold** — uv + Python 3.12, `src/fantasy_football/{data,projections,draft,lineup,transactions,season}`, `.env.example`, gitleaks pre-commit, pytest, ruff.
+- [x] 2. **ESPN client** (`data/espn.py`) — authenticated `espn-api` wrapper reading league settings, rosters, free agents, schedule, and prior-season draft results. Everything downstream reads scoring rules, roster slots, league size, and keeper rules from here; nothing about the league is hardcoded. Snapshot responses to `data/cache/` so the whole test suite runs offline.
 - [x] 3. **nflverse ingest** (`data/nflverse.py`) — `load_ff_rankings()` for FantasyPros consensus, `load_ff_opportunity()` for expected-fantasy-points, `load_player_stats()` and `load_snap_counts()` for history, `load_ff_playerids()` for cross-platform identity. Cached to parquet.
 - [x] 4. **ID bridge** (`data/ids.py`) — ESPN ids joined to nflverse by normalized name, with uniqueness-guarded surname fallbacks and an explicit alias map. Ambiguous matches are refused rather than guessed, and every miss is reported. 100% coverage through ECR 200; `check_bridge` reports it.
 - [x] 5. **Scoring engine** (`projections/scoring.py`) — converts any raw stat line into this league's points, driven entirely by the settings from step 2. **Gate passed:** 1,922/1,922 player-weeks in 2025 and 2,165/2,165 in 2024 reproduced exactly (`check_scoring`). Works in ESPN's stat-id space, not stat names, because `PLAYER_STATS_MAP` maps several ids onto one name (`passingYards` is both 3 and 22) and cannot be inverted; ESPN publishes the duplicate and scores only one copy, which is unambiguous by id. Per-position scoring overrides are preserved rather than collapsed.
@@ -96,12 +100,46 @@ Three properties of this format drive the modeling and are easy to get wrong:
 
 - [x] 8. **Weekly lineup optimizer** (`lineup/optimizer.py`) — MILP via PuLP over the league's real slot rules, so an illegal lineup is impossible by construction. **This is where the edge actually lives.**
 
-      `check_lineups` measured the prize: the league leaves **272 points a season on the bench** (20.9/week), against a total draft edge of 81. `check_optimizer` then replayed all of 2025 using only ESPN's contemporaneous weekly projections and scored the result on what actually happened: **+200 points a season, +15.4 per week, capturing 74% of the ceiling — and beating all eight managers**, by margins from +16 to +380.
+      **CORRECTION (2026-09-11) — the headline number was wrong, and the edge is much smaller than claimed.** Both `check_lineups` and `check_optimizer` mapped ESPN's `defaultPositionId` through the **lineup-slot** enumeration instead of the **player-position** one. The two collide only at 16 (D/ST), which is exactly why it survived: the scoring engine branches on nothing else, so its 1,922/1,922 reconciliation gate passed regardless. Everywhere else it was silently destructive — quarterbacks, receivers and kickers were dropped from every roster and tight ends came back labelled as receivers. The measured rosters were roughly half a team. `data/espn.PLAYER_POSITION_BY_ID` is now the single definition and both modules use it.
+
+      With the enum fixed, `check_optimizer` reports +217 points a season. **That number is still not an edge**, because of a second and deeper problem: ESPN does not keep historical weekly lineups. A request for week 3 returns the roster and the lineup slots *as they stand today* — week 1 and week 13 come back byte-identical — which is why `box_scores()` raises `KeyError` on a finished season. So the "manager" column is not what the manager started; it is the lineup they finished with, scored against every week.
+
+      Compared against what the managers **really** scored, from the scoreboard's own `pointsByScoringPeriod`, the projection-maximizing lineup is worth **+0.5 points a week** (spread 3.7 across the eight teams, so about 0.4 standard errors — indistinguishable from zero). The 2025 league averaged 128.3 points a week; projection-max on the same rosters averaged 128.8. And that comparison *flatters* the optimizer, since it gets to use the roster each manager finished with in every week of the season.
+
+      **Honest position: the optimizer's in-season edge is unmeasured, not established.** It is not disproven either — the test that would settle it needs weekly roster snapshots taken live, which the 2026 season can start collecting and no replay can recover. The claim that "the edge is in-season lineups, not the draft" rests on this measurement and should be treated as open. What survives unharmed: the lineup is legal by construction, and it will never start a player who is out or on bye, which the old one did.
 
       The matchup-aware objective (sweep a risk frontier, then score each candidate by exact win probability against that week's opponent) turned out to pick almost the same lineup as plain projection-maximizing — a +2 point difference over a season, with only two teams ever diverging. Honest read: with a full roster the variance differences between startable options are small next to the mean differences, so risk-adjustment has little room to work. Judging it properly needs head-to-head results rather than point totals, but the ceiling on its value is clearly small. **Simply starting the right players is where the 200 points come from.**
-- [ ] 9. **Waivers + trades** (`transactions/`) — rest-of-season projections drive add/drop and trade evaluation, with every candidate move priced as a delta in P(first), not a delta in points. Waiver-priority aware (this league does not use FAAB).
-- [ ] 10. **Season simulator** (`season/`) — Monte Carlo the remaining schedule using the projection distributions to produce P(first) per manager, plus playoff seeding odds. This feeds the risk posture in steps 8 and 9 and is the repo's headline chart.
-- [ ] 11. **Weekly run loop** — one command that refreshes data, regenerates projections, and emits a markdown report with the recommended lineup, waiver targets, and trade ideas, each annotated with its championship-probability impact.
+- [x] 9. **Waivers + trades** (`transactions/`) — rest-of-season projections drive add/drop and trade evaluation, with every candidate move priced as a delta in P(first), not a delta in points. Waiver-priority aware (this league does not use FAAB).
+
+      **Fixed 2026-09-11, after the first live report recommended giving away our best running back for a third quarterback.** Three separate faults, each of which alone made the output untrustworthy:
+
+      *Surplus was defined as low-scoring.* On a receiver-heavy roster the best RB sits below six receivers on raw projection while being the only player who can fill a starting RB slot. `marginal_cost` now measures what removing a player actually costs the lineup: Jaylen Warren costs 0.44 points a week, the sixth receiver costs nothing.
+
+      *The search was one-for-one only.* Trading two of six startable receivers for two startable running backs is a two-for-two, and no sequence of one-for-ones reaches it through a roster with no spare slot. Candidates are screened on points first — fast and deterministic — and only the survivors are simulated.
+
+      *The deltas were noise.* At the 200–600 trials these ran at, the standard error on a title delta is 1.1–1.6 percentage points; the trade being recommended was "+0.50%". Every delta now carries the standard error of the *paired difference*, and anything inside it is refused rather than printed.
+
+      Shortlisting is by whichever side gains **least**. Ranking by our own gain filled the list with deals that improve a rival's lineup on points while costing them 16 points of title probability — proposals they refuse, crowding out the ones they would not.
+- [x] 10. **Season simulator** (`season/`) — Monte Carlo the remaining schedule using the projection distributions to produce P(first) per manager, plus playoff seeding odds. This feeds the risk posture in steps 8 and 9 and is the repo's headline chart.
+
+      **Validated 2026-09-11 by `check_simulator`, which found it overconfident and then fixed it.** Replaying 2025 week by week, the original simulator *lost* to "rank the teams by their record so far" (Brier 0.2483 against 0.2393) and was badly miscalibrated in the middle: outcomes it called 58% happened 36% of the time.
+
+      The cause was modelling one source of uncertainty where there are two. A team's weekly score varies around its mean — that is `weekly_sd` — but the mean itself is an estimate and can simply be wrong. Simulating only the first treats a projection as a known fact. `mean_uncertainty` now draws each team's true strength once per trial and holds it for the whole season, bracket included, so a thirteen-week run no longer assumes it knew the answer in week 3. Set to the standard error of the estimate, sd/sqrt(n) — **derived, not fitted** — it scores 0.2318 and beats every naive baseline. A constant tuned on the same season scores better still, which is exactly why it was not used.
+
+      Also fixed: the bracket. The old pairing loop was a `zip` against its own reverse with two `break` conditions; it was correct for four teams by luck and silently eliminated a team at odd bracket sizes. It is now explicit, gives the top seed the bye, and is tested directly for 1v4 / 2v3 pairing rather than inferred from championship totals.
+
+      The whole simulation is vectorized over trials, which is what makes the error bars affordable: 20,000 trials run in 0.04s against several seconds for the old Python loop, and the trade search evaluates hundreds of rosters.
+
+      **What it does not validate:** the roster projections feeding it. The replay takes each team's scoring distribution from its own past results, so it tests the schedule, seeding and bracket machinery, not the inputs. One season of one league is 8 teams and 13 weeks — a small Brier edge is suggestive, not settled.
+- [x] 11. **Weekly run loop** (`weekly.py`) — one command that refreshes data, regenerates projections, and emits a markdown report with the recommended lineup, waiver targets, and trade ideas, each annotated with its championship-probability impact.
+
+      **One baseline per report.** Sections used to re-simulate independently at different trial counts, so a single report quoted 8.4%, 6.3% and 5.5% as the same team's title odds in the same week, and every delta was measured against a moving target. The baseline is computed once, its Monte Carlo error is printed, and every section differences against it.
+
+      **Two horizons, two valuations.** Start/sit runs on ESPN's published weekly projections — the input `check_optimizer` replays, and the only one that can see a matchup or a player ruled out an hour ago. The season simulator runs on the fitted rank curves, because it plays out the rest of the season and must not assume every week looks like this one. Collapsing the two was the original mistake.
+
+      **Injuries are handled like byes.** `build_state` read every player on the roster regardless of status, so the first live report recommended starting A.J. Brown, who was on injured reserve carrying a 13.8-point ESPN projection. OUT, INJURY_RESERVE, DOUBTFUL and SUSPENSION are zeroed for the current week only — a player on IR in September is usually back before December, so his rest-of-season value is left alone. QUESTIONABLE is deliberately untouched; those players mostly play. Note that team defences report `NORMAL` rather than `ACTIVE`, so a whitelist of healthy statuses would bench every defence in the league.
+
+      **The lineup comparison reads real ESPN slots.** `to_roster_player` never received one, so `slot_id` defaulted to -1, `started` was true for all sixteen players, and "your current lineup is already optimal" was comparing the best nine against the entire roster — a test nothing could fail. Week 2 of 2026 actually had 17.2 points sitting on the bench.
 
 ## Validation
 
@@ -110,7 +148,8 @@ Three properties of this format drive the modeling and are easy to get wrong:
 - Projection intervals are calibration-checked on held-out 2025 weeks, not scored on RMSE alone.
 - The optimizer is property-tested against the league's slot rules — an illegal lineup is a build failure, not a bug report.
 - The draft kit is rehearsed end-to-end against the 2025 draft before it is used live.
-- No recommendation ships without its P(first) delta attached.
+- No recommendation ships without its P(first) delta attached, **and no delta ships without its own standard error**. `check_simulator` replays a finished season week by week, predicting the top-4 finish from each week's standpoint using only earlier scores, and scores those predictions against what happened. It must beat the naive baselines — rank by record, rank by strength, or call everything 50/50 — or the simulator is decoration.
+- Historical ESPN weekly *lineups* do not exist (see step 8), so anything claiming to replay weekly decisions must say what it is actually replaying. Real weekly *team scores* do exist, via `pointsByScoringPeriod`, and are the honest backtest surface.
 
 ## Open questions
 
@@ -118,4 +157,4 @@ Three properties of this format drive the modeling and are easy to get wrong:
 2. Does the flat scarcity gradient in an 8-team league leave enough draft-day edge to be worth the modeling, or does the real advantage sit in weekly lineups and waivers? Worth measuring explicitly in the step 7 rehearsal rather than assuming.
 3. FantasyPros ECR carries no scoring-format variant in the nflverse feed, but this league is full PPR, which shifts RB/WR balance materially. Quantify how far the generic board sits from a PPR-correct one before leaning on it — the rank→points curve in step 6 is fit on this league's own scoring, so this may resolve itself.
 
-**Resolved:** the league has 2024 and 2025 history reachable through the API (the web UI hides it from members who joined later), so both the box-score reconciliation gate and the draft opponent model have real data. 2024 ran 9 teams and a 14-week season; 2025 and 2026 are identical 8-team, 13-week, full-PPR configurations, so anything fit across both seasons must normalize for size.
+**Resolved:** the league has 2024 and 2025 history reachable through the API (the web UI hides it from members who joined later), so both the box-score reconciliation gate and the draft opponent model have real data. 2024 ran 9 teams and a 14-week season; 2025 ran 8 teams over 13 weeks and 2026 runs 8 teams over 14, all full PPR, so anything fit across seasons must normalize for size and season length.

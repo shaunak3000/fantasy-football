@@ -11,6 +11,15 @@ This measures the ceiling, not our skill: it compares what each manager started
 against the best lineup their roster could have produced *with hindsight*. No
 tool achieves that. But it bounds the prize, and a prize worth less than the
 noise is not worth chasing.
+
+**Known limitation, and it is a large one.** ESPN does not retain historical
+weekly lineups — a request for week 3 hands back the roster and the lineup slots
+as they stand today, byte-identical for every week of the season. The "started"
+column is therefore the lineup each manager *finished* with, replayed against
+every week, not what they actually fielded. That understates them, so the gap
+reported here is an upper bound on the prize rather than a measurement of it.
+`check_simulator` explains what can honestly be replayed from this API and what
+cannot.
 """
 
 from __future__ import annotations
@@ -21,12 +30,17 @@ from collections import defaultdict
 from espn_api.football import League
 
 from .config import load_credentials
-from .data.espn import ACTUAL_STAT_SOURCE, WEEKLY_SPLIT, fetch_raw_settings, parse_settings
+from .data.espn import (
+    ACTUAL_STAT_SOURCE,
+    PLAYER_POSITION_BY_ID,
+    WEEKLY_SPLIT,
+    fetch_raw_settings,
+    parse_settings,
+)
 from .draft.lineup_value import FLEX_ELIGIBILITY, FLEX_SLOTS
 from .projections.scoring import ScoringEngine
 
 BENCH_SLOTS = {20, 21, 24}  # bench, IR, and the "everything else" slot
-POSITION_BY_ID = {0: "QB", 2: "RB", 4: "WR", 6: "TE", 16: "D/ST", 17: "K", 23: "RB/WR/TE"}
 
 
 def _starting_requirements(settings) -> list[tuple[str, tuple[str, ...]]]:
@@ -102,7 +116,7 @@ def main(argv: list[str]) -> int:
                     continue
 
                 points = engine.score(stats, player.get("defaultPositionId", -1))
-                position = POSITION_BY_ID.get(player.get("defaultPositionId", -1))
+                position = PLAYER_POSITION_BY_ID.get(player.get("defaultPositionId", -1))
                 if position is None:
                     continue
 
@@ -142,6 +156,15 @@ def main(argv: list[str]) -> int:
     print("\n  This is the hindsight ceiling, not an achievable target - nobody knows")
     print("  in advance which bench player will go off. But it bounds the prize:")
     print("  an optimizer that captures even a quarter of it is worth having.")
+    print("\n  READ THE 'started' COLUMN WITH CARE. ESPN does not keep historical")
+    print("  weekly lineups: a request for week 3 returns the roster and lineup")
+    print("  slots as they stand today, identical for every week. So 'started' is")
+    print("  the lineup each manager FINISHED with, scored against every week -")
+    print("  not what they actually fielded, which changed weekly. It therefore")
+    print("  understates them, and this 'left on the bench' figure is an upper")
+    print("  bound on the prize rather than a measurement of it. Against real")
+    print("  scoreboard totals the 2025 managers averaged 128.3 points a week,")
+    print("  well above the number in this table.")
     return 0
 
 

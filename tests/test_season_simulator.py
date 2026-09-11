@@ -1,6 +1,13 @@
+import numpy as np
 import pytest
+from numpy.random import default_rng
 
-from fantasy_football.season.simulator import TeamSeason, simulate
+from fantasy_football.season.simulator import (
+    TeamSeason,
+    _bracket_winners,
+    paired_delta,
+    simulate,
+)
 
 
 def league(strengths, sd=20.0):
@@ -81,3 +88,119 @@ class TestBankedResults:
         schedule = {t.team_id: [] for t in teams}
         outcome = simulate(teams, schedule, playoff_teams=2, trials=50)
         assert sum(outcome.championship.values()) == pytest.approx(1.0, abs=1e-6)
+
+
+class TestBracket:
+    """The bracket was previously an unreadable zip with two break conditions.
+
+    It happened to be right for four teams and silently dropped a team for odd
+    sizes. These pin the pairing down directly rather than inferring it from
+    championship totals.
+    """
+
+    def _pairing(self, strengths, trials=4000, seed=1):
+        """Champion shares when seeds are separated by huge scoring gaps."""
+        means = np.array(strengths, dtype=float)
+        sds = np.full(len(strengths), 1e-3)
+        qualifiers = np.tile(np.arange(len(strengths))[:, None], (1, trials))
+        winners = _bracket_winners(
+            qualifiers, np.tile(means[:, None], (1, trials)), sds, default_rng(seed)
+        )
+        return {i: float((winners == i).mean()) for i in range(len(strengths))}
+
+    def test_the_top_seed_plays_the_bottom_seed(self):
+        """1v4 and 2v3, so seed 2 reaches the final when seed 1 is unbeatable."""
+        shares = self._pairing([1000.0, 500.0, 400.0, 1.0])
+        assert shares[0] == pytest.approx(1.0)
+        assert shares[1] == 0.0 and shares[2] == 0.0 and shares[3] == 0.0
+
+    def test_pairing_is_one_v_four_and_not_one_v_two(self):
+        """Three equal teams and one hopeless one separate the two bracketings.
+
+        Under the correct 1v4 / 2v3 the top seed draws the walkover and reaches
+        the final every time, taking half the titles while seeds 2 and 3 split
+        the rest. Under a 1v2 / 3v4 bracket those roles swap and the *third*
+        seed is the one handed the free pass. Champion totals alone cannot tell
+        the two apart in most setups, which is why this one is shaped so they
+        can.
+        """
+        shares = self._pairing([100.0, 100.0, 100.0, 1.0], trials=40000)
+        assert shares[0] == pytest.approx(0.5, abs=0.02)
+        assert shares[1] == pytest.approx(0.25, abs=0.02)
+        assert shares[2] == pytest.approx(0.25, abs=0.02)
+        assert shares[3] == pytest.approx(0.0, abs=0.01)
+
+    def test_a_stronger_seed_wins_more_often(self):
+        shares = self._pairing([120.0, 119.0, 118.0, 117.0], trials=20000)
+        assert shares[0] > shares[3]
+        assert sum(shares.values()) == pytest.approx(1.0)
+
+    def test_an_odd_bracket_gives_the_top_seed_a_bye_and_drops_nobody(self):
+        """Three qualifiers: the old loop eliminated the second seed silently."""
+        shares = self._pairing([100.0, 100.0, 100.0], trials=20000)
+        assert sum(shares.values()) == pytest.approx(1.0)
+        # Seed 1 sits out the first round, so it wins more than the two who play.
+        assert shares[0] > shares[1] > 0.0
+        assert shares[2] > 0.0
+
+
+class TestDeltasCarryTheirOwnError:
+    def _league(self):
+        teams = league([120, 118, 116, 114, 112, 110, 108, 106])
+        return teams, round_robin([t.team_id for t in teams], 13)
+
+    def test_an_identical_rerun_is_exactly_zero(self):
+        """Common random numbers: no change must mean no measured change."""
+        teams, schedule = self._league()
+        before = simulate(teams, schedule, 4, trials=2000, seed=3)
+        after = simulate(teams, schedule, 4, trials=2000, seed=3)
+        assert paired_delta(before, after, 1) == (0.0, 0.0)
+
+    def test_a_real_improvement_clears_its_own_error(self):
+        teams, schedule = self._league()
+        before = simulate(teams, schedule, 4, trials=20000, seed=3)
+        teams[7].weekly_mean += 15.0
+        after = simulate(teams, schedule, 4, trials=20000, seed=3)
+        delta, stderr = paired_delta(before, after, 8)
+        assert delta > stderr > 0.0
+
+    def test_the_error_shrinks_as_trials_grow(self):
+        teams, schedule = self._league()
+        errors = []
+        for trials in (500, 20000):
+            before = simulate(teams, schedule, 4, trials=trials, seed=5)
+            teams[7].weekly_mean += 2.0
+            after = simulate(teams, schedule, 4, trials=trials, seed=5)
+            teams[7].weekly_mean -= 2.0
+            errors.append(paired_delta(before, after, 8)[1])
+        assert errors[1] < errors[0]
+
+
+class TestMeanUncertainty:
+    def test_uncertain_strength_pulls_probabilities_toward_even(self):
+        """The fix for the overconfidence `check_simulator` measured.
+
+        Not knowing how good the teams really are must make a strong team's
+        title less of a foregone conclusion.
+        """
+        ids = list(range(1, 9))
+        schedule = round_robin(ids, 13)
+
+        def odds(uncertainty):
+            teams = [
+                TeamSeason(
+                    team_id=i + 1,
+                    name=f"T{i + 1}",
+                    weekly_mean=mean,
+                    weekly_sd=20.0,
+                    mean_uncertainty=uncertainty,
+                )
+                for i, mean in enumerate([140, 120, 118, 116, 114, 112, 110, 100])
+            ]
+            return simulate(teams, schedule, 4, trials=20000, seed=11).championship[1]
+
+        assert odds(15.0) < odds(0.0)
+
+    def test_it_is_off_by_default(self):
+        team = TeamSeason(team_id=1, name="x", weekly_mean=100.0, weekly_sd=20.0)
+        assert team.mean_uncertainty == 0.0
