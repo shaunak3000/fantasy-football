@@ -141,6 +141,18 @@ Three properties of this format drive the modeling and are easy to get wrong:
 
       **The lineup comparison reads real ESPN slots.** `to_roster_player` never received one, so `slot_id` defaulted to -1, `started` was true for all sixteen players, and "your current lineup is already optimal" was comparing the best nine against the entire roster — a test nothing could fail. Week 2 of 2026 actually had 17.2 points sitting on the bench.
 
+- [x] 12. **Weekly roster snapshots** (`data/snapshots.py`, `check_snapshots`) — capture what every manager actually started, every week, while it still exists.
+
+      **This is the only irreplaceable data in the repo, and collecting it is a standing weekly duty.** ESPN serves exactly one roster per league: the current one. A request for a past week's `mRoster` returns today's players in today's lineup slots — week 1 and week 13 of a finished season come back byte-identical. So a week that passes uncaptured is gone permanently, and no amount of care afterwards recovers it.
+
+      That gap is precisely why step 8's headline claim had to be withdrawn. `check_optimizer` could only compare against the lineup each manager *finished* with, because that is the only lineup ESPN would tell it. A season of these files is what makes that comparison honest, and it is the single thing standing between "the optimizer beats the league" being an open question and a settled one.
+
+      `weekly.py` captures automatically on every run, always targeting the *live* scoring period rather than the week being reported on, and never raising — a failed snapshot must not take the report down. Files land in `data/snapshots/<season>/weekNN.json`, which is **tracked in git** rather than gitignored like `data/cache/`, so they travel between machines.
+
+      The guards are the point. A stale capture never lands: running the report for week 3 in week 10 would otherwise overwrite the real week-3 lineups with the week-10 roster, silently replacing the only copy of the data with a worthless one. A capture without results never replaces one that has them. But results *are* allowed to arrive late — stat lines stay available per week forever, so a Tuesday capture fills in Sunday's scores while keeping the lineups recorded while the week was live.
+
+      `uv run python -m fantasy_football.check_snapshots [season]` prints coverage: which weeks are captured, which are missing and unrecoverable, and which still await results.
+
 ## Validation
 
 - The scoring engine reproduces 2025 ESPN box scores exactly before any projection is trusted (step 5 is a hard gate on steps 6–11).
@@ -150,6 +162,14 @@ Three properties of this format drive the modeling and are easy to get wrong:
 - The draft kit is rehearsed end-to-end against the 2025 draft before it is used live.
 - No recommendation ships without its P(first) delta attached, **and no delta ships without its own standard error**. `check_simulator` replays a finished season week by week, predicting the top-4 finish from each week's standpoint using only earlier scores, and scores those predictions against what happened. It must beat the naive baselines — rank by record, rank by strength, or call everything 50/50 — or the simulator is decoration.
 - Historical ESPN weekly *lineups* do not exist (see step 8), so anything claiming to replay weekly decisions must say what it is actually replaying. Real weekly *team scores* do exist, via `pointsByScoringPeriod`, and are the honest backtest surface.
+- Going forward they are being recorded as the season runs (step 12). Once a season of `data/snapshots/` exists, `check_optimizer` can finally be rerun against what managers really started, and the withdrawn step 8 claim can be settled either way.
+
+## Running it during the season
+
+**Run `uv run python -m fantasy_football.weekly` at least once a week, every week, before kickoff.** It prints the report *and* captures that week's lineups, which is the part that cannot wait — see step 12. Run it again after the games to pull the final scores in.
+
+Then `uv run python -m fantasy_football.check_snapshots` to confirm there are no gaps. A gap is permanent.
+
 
 ## Open questions
 

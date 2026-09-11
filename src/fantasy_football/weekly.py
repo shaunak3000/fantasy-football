@@ -21,6 +21,7 @@ from espn_api.football import League
 
 from .config import load_credentials
 from .data.espn import fetch_raw_settings, fetch_weekly_projections, parse_settings
+from .data.snapshots import capture_and_save
 from .draft.cache import load_bundle
 from .draft.live import my_team_id
 from .lineup.optimizer import best_lineup_against, optimize
@@ -186,6 +187,14 @@ def main(argv: list[str]) -> int:
         return 1
 
     print(f"\n# {settings.name} {season} — week {week}\n")
+
+    # Record this week's lineups before anything else. ESPN serves only the
+    # current week's roster, so a week that goes uncaptured is gone for good —
+    # this is the one thing here that cannot be rerun later. It always snapshots
+    # the *live* scoring period, not the week being reported on, and it never
+    # raises: a failed snapshot must not take the report down with it.
+    live_week = max(int(getattr(league, "nfl_week", week) or week), 1)
+    print(f"_Snapshot: {capture_and_save(league, live_week, season)}._\n")
 
     # One baseline, computed once, shared by every section below. The standings
     # table, the waiver deltas and the trade deltas are all differences against

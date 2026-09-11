@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data"
 CACHE_DIR = DATA_DIR / "cache"
+SNAPSHOT_DIR = DATA_DIR / "snapshots"
 
 # Credentials live outside the repo, in Dropbox, so the same file serves both
 # machines and cannot be committed by accident. Searched in order; the first
@@ -92,5 +93,19 @@ def load_credentials(require_private: bool = True) -> EspnCredentials:
 
 def cache_path(*parts: str) -> Path:
     path = CACHE_DIR.joinpath(*parts)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def snapshot_path(*parts: str) -> Path:
+    """Where weekly roster snapshots live — tracked in git, unlike the cache.
+
+    `data/cache/` is gitignored because everything in it can be refetched. These
+    cannot: ESPN serves only the current week's lineup, so a week that goes
+    uncaptured is gone for good. They are the one piece of data in this repo
+    that no amount of rerunning can reproduce, so they are committed and travel
+    between machines with the code.
+    """
+    path = SNAPSHOT_DIR.joinpath(*parts)
     path.parent.mkdir(parents=True, exist_ok=True)
     return path

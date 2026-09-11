@@ -63,7 +63,9 @@ of historical data into `data/cache/` — expect one slow run, then it is cached
 
 This repo previously claimed the optimizer was worth +200 points a season, beating all eight managers. **That claim has been withdrawn.** It came from a replay that mapped ESPN's `defaultPositionId` through the lineup-slot enumeration rather than the player-position one, which silently dropped every quarterback, receiver and kicker and relabelled tight ends as receivers. It also compared against a lineup ESPN cannot supply: a request for a past week returns the roster and slots *as they stand today*, so the "manager" baseline was the lineup they finished with, scored against every week of the season.
 
-Measured against what the managers really scored, from the scoreboard itself, the projection-maximizing lineup is worth **+0.5 points a week across eight teams, with a spread of 3.7** — indistinguishable from zero, and that comparison already flatters the optimizer. The honest position is that the in-season edge is unmeasured rather than established; settling it needs weekly roster snapshots captured live, which no replay can recover. See `PLAN.md` step 8.
+Measured against what the managers really scored, from the scoreboard itself, the projection-maximizing lineup is worth **+0.5 points a week across eight teams, with a spread of 3.7** — indistinguishable from zero, and that comparison already flatters the optimizer. The honest position is that the in-season edge is unmeasured rather than established. See `PLAN.md` step 8.
+
+Settling it needs lineups recorded as they happen, so the repo now does that: `weekly.py` captures every roster on each run into `data/snapshots/`, which is committed rather than gitignored. **Run it weekly during the season — a week that passes uncaptured is unrecoverable.** `check_snapshots` shows coverage.
 
 **Roster moves** are priced as a change in P(finishing first), simulated through the actual playoff bracket. In a league where 4 of 8 qualify and the title is two single-game coin flips, points and championships genuinely diverge.
 
