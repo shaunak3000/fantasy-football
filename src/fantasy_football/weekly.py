@@ -35,6 +35,7 @@ from .transactions.evaluate import (
     find_trades,
     rank_waiver_targets,
 )
+from .transactions.streaming import find_stream
 
 SEASON = 2026
 TRAIN_SEASONS = [2021, 2022, 2023, 2024, 2025]
@@ -168,6 +169,9 @@ def main(argv: list[str]) -> int:
 
     training, _ = training_table(TRAIN_SEASONS, engine)
     weekly_model = WeeklyModel.fit(training)
+    # Hoisted rather than called inline: the streaming check below needs the same
+    # numbers, and this is a 900-player request not worth making twice.
+    published = fetch_weekly_projections(league, week)
     state = build_state(
         league,
         settings,
@@ -175,7 +179,7 @@ def main(argv: list[str]) -> int:
         weekly_model,
         current_week=week,
         byes=bye_weeks_by_espn_id() if season == SEASON else {},
-        weekly_projections=fetch_weekly_projections(league, week),
+        weekly_projections=published,
     )
 
     my_id = my_team_id(league, creds.swid)
@@ -262,6 +266,22 @@ def main(argv: list[str]) -> int:
     for advice in useful:
         print(f"  {advice.move.summary()}")
         print(f"      {advice.points_gain:+.1f} pts/week to the lineup — {advice.verdict}")
+
+    # Defence is the one position where the weekly matchup is worth chasing —
+    # about 8% of variation against 2-3% for skill players — and the one the
+    # optimizer above cannot help with, because it only ranks the defence
+    # already on the roster and never looks at the wire for a better one.
+    stream = find_stream(
+        published,
+        my_ids={p.espn_id for p in state.rosters[my_id]},
+        rostered_ids={p.espn_id for roster in state.rosters.values() for p in roster},
+    )
+    if stream is not None:
+        print("\n## Stream a defence\n")
+        print(f"  {stream.summary()}")
+        if stream.runners_up:
+            others = ", ".join(f"{name} {points:.1f}" for name, points in stream.runners_up)
+            print(f"      also free: {others}")
 
     print("\n## Trades worth proposing\n")
     print("_Advisory. Only trades that help both sides are listed; a proposal they_")

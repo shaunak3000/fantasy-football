@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-09-23T16:10:54+00:00",
+  "captured_at": "2026-09-23T17:33:31+00:00",
   "names": {
     "1": "Running Back to Last",
     "10": "itsaRBpartynow",
@@ -288,7 +288,7 @@
       {
         "actual": null,
         "espn_id": 4569987,
-        "injury_status": "ACTIVE",
+        "injury_status": "QUESTIONABLE",
         "name": "Jaylen Warren",
         "position": "RB",
         "projected": 13.29490868,
@@ -323,21 +323,12 @@
       },
       {
         "actual": null,
-        "espn_id": 4371733,
-        "injury_status": "ACTIVE",
-        "name": "Kenny Gainwell",
-        "position": "RB",
-        "projected": 7.6122755,
-        "slot_id": 20
-      },
-      {
-        "actual": null,
         "espn_id": -16021,
         "injury_status": null,
         "name": "Eagles D/ST",
         "position": "D/ST",
         "projected": 8.17575762,
-        "slot_id": 16
+        "slot_id": 20
       },
       {
         "actual": null,
@@ -383,6 +374,15 @@
         "position": "K",
         "projected": 10.01768077,
         "slot_id": 20
+      },
+      {
+        "actual": null,
+        "espn_id": -16008,
+        "injury_status": null,
+        "name": "Lions D/ST",
+        "position": "D/ST",
+        "projected": 9.48666202,
+        "slot_id": 16
       }
     ],
     "4": [
@@ -771,7 +771,7 @@
       {
         "actual": null,
         "espn_id": 3916148,
-        "injury_status": "ACTIVE",
+        "injury_status": "QUESTIONABLE",
         "name": "Tony Pollard",
         "position": "RB",
         "projected": 10.56138216,
@@ -1045,7 +1045,7 @@
       {
         "actual": null,
         "espn_id": 4426348,
-        "injury_status": "DOUBTFUL",
+        "injury_status": "OUT",
         "name": "Jayden Daniels",
         "position": "QB",
         "projected": 0.0,

@@ -141,6 +141,14 @@ Three properties of this format drive the modeling and are easy to get wrong:
 
       **The lineup comparison reads real ESPN slots.** `to_roster_player` never received one, so `slot_id` defaulted to -1, `started` was true for all sixteen players, and "your current lineup is already optimal" was comparing the best nine against the entire roster — a test nothing could fail. Week 2 of 2026 actually had 17.2 points sitting on the bench.
 
+      **Defence streaming** (`transactions/streaming.py`, added 2026-09-23) — the one matchup worth chasing, and the one the optimizer structurally cannot find. `optimize` ranks only the defence already on the roster; it never looks at the wire for a better one, so three weeks running this was done by hand.
+
+      The justification is measured, not assumed. Across weeks 4-10 of 2026 — where the schedule is known and nothing else about a player has changed yet, so the spread isolates the matchup adjustment — ESPN's weekly projections vary by **2-3% for skill players** (0.46 points of standard deviation on Amon-Ra St. Brown, 0.19 on Harold Fannin) and by about **8% for team defences**, because defensive scoring depends far more on the offence you face than on your own roster. Chasing a matchup at running back is noise; at defence it is worth a point or so a week, and it is available for a free-agent add because nobody in an eight-team league carries a spare defence.
+
+      The rule is deliberately **not** "find the weakest opponent". ESPN's projection already blends opponent strength with the defence's own quality, and the blend beats either half: in week 3 the Lions projected best of the free agents at 9.5 while facing the Jets' strong offence, because Detroit's defence carried it. An independent opponent-strength ranking (sum of the opposing team's top-8 projected skill players) agreed with ESPN's ordering, which is a useful sanity check and also means there is no edge hiding in building one.
+
+      A **1.0-point threshold** decides whether to report. It sits between the two real cases: week 2 offered +0.5 (Buccaneers over Eagles) and was rightly skipped, week 3 offered +1.3 (Lions over Eagles) and was not. Below the threshold the section prints nothing rather than manufacturing advice. `find_stream` takes a `position` argument, so the same machinery covers kicker if that ever proves worth it.
+
 - [x] 12. **Weekly roster snapshots** (`data/snapshots.py`, `check_snapshots`) — capture what every manager actually started, every week, while it still exists.
 
       **This is the only irreplaceable data in the repo, and collecting it is a standing weekly duty.** ESPN serves exactly one roster per league: the current one. A request for a past week's `mRoster` returns today's players in today's lineup slots — week 1 and week 13 of a finished season come back byte-identical. So a week that passes uncaptured is gone permanently, and no amount of care afterwards recovers it.
@@ -150,6 +158,12 @@ Three properties of this format drive the modeling and are easy to get wrong:
       `weekly.py` captures automatically on every run, always targeting the *live* scoring period rather than the week being reported on, and never raising — a failed snapshot must not take the report down. Files land in `data/snapshots/<season>/weekNN.json`, which is **tracked in git** rather than gitignored like `data/cache/`, so they travel between machines.
 
       The guards are the point. A stale capture never lands: running the report for week 3 in week 10 would otherwise overwrite the real week-3 lineups with the week-10 roster, silently replacing the only copy of the data with a worthless one. A capture without results never replaces one that has them. But results *are* allowed to arrive late — stat lines stay available per week forever, so a Tuesday capture fills in Sunday's scores while keeping the lineups recorded while the week was live.
+
+      **Results are now collected, not merely permitted (fixed 2026-09-23).** The paragraph above was true and useless: late results were *allowed* to land, and nothing ever brought them. `weekly.py` only ever captured the live scoring period, which by definition has no scores in it — the games have not been played. So the files recorded what every manager started and not what it was worth, which is half of what the backtest needs. Weeks 1 and 2 of 2026 sat at 20 and 0 players scored. `weekly.py` now re-fetches finished weeks whose scores are not yet final; they filled in at 126 and 118.
+
+      Deciding when to stop coming back was the whole difficulty, and the obvious test is wrong. "Every starter has a stat line" never completes: **ESPN publishes no stat line at all for a player who was started and did not play**, and week 2 has three of those — Puka Nacua, Nico Collins and Zay Flowers were all in lineups and all inactive — so that week would have been re-fetched forever. `has_results` fails in the other direction, being true the moment anybody scores, which a Thursday capture satisfies while missing 100+ lines; that is why week 1 reported results at 20 of 126.
+
+      So the question is not what the file contains but when it was filled. Snapshots record `results_week`, the league's live scoring period at the moment stat lines were pulled. Once that is past the snapshot's own week, the week was over and the scores are as final as they will ever get. Files written before this get exactly one refetch to set it, so the fix is self-healing.
 
       `uv run python -m fantasy_football.check_snapshots [season]` prints coverage: which weeks are captured, which are missing and unrecoverable, and which still await results.
 
@@ -163,18 +177,18 @@ Three properties of this format drive the modeling and are easy to get wrong:
 - No recommendation ships without its P(first) delta attached, **and no delta ships without its own standard error**. `check_simulator` replays a finished season week by week, predicting the top-4 finish from each week's standpoint using only earlier scores, and scores those predictions against what happened. It must beat the naive baselines — rank by record, rank by strength, or call everything 50/50 — or the simulator is decoration.
 - Historical ESPN weekly *lineups* do not exist (see step 8), so anything claiming to replay weekly decisions must say what it is actually replaying. Real weekly *team scores* do exist, via `pointsByScoringPeriod`, and are the honest backtest surface.
 - Going forward they are being recorded as the season runs (step 12). Once a season of `data/snapshots/` exists, `check_optimizer` can finally be rerun against what managers really started, and the withdrawn step 8 claim can be settled either way.
+- A recommendation that fires on noise is worse than none, because it spends a real transaction. The defence-streaming threshold (step 11) is set from the two cases that actually occurred rather than picked: +0.5 skipped, +1.3 taken. Anything below it prints nothing.
 
 ## Running it during the season
 
-**Run `uv run python -m fantasy_football.weekly` at least once a week, every week, before kickoff.** It prints the report *and* captures that week's lineups, which is the part that cannot wait — see step 12. Run it again after the games to pull the final scores in.
+**Run `uv run python -m fantasy_football.weekly` at least once a week, every week, before kickoff.** It prints the report *and* captures that week's lineups, which is the part that cannot wait — see step 12. Lineups are only available while the week is live; scores are not, so the same run also goes back and fills in the stat lines for any finished week still missing them. One run a week is therefore enough, and a missed run costs only that week's lineups rather than its scores too.
 
 Then `uv run python -m fantasy_football.check_snapshots` to confirm there are no gaps. A gap is permanent.
 
 
 ## Open questions
 
-1. Draft date not scheduled as of 2026-08-06 — mid-August readiness is the working target.
-2. Does the flat scarcity gradient in an 8-team league leave enough draft-day edge to be worth the modeling, or does the real advantage sit in weekly lineups and waivers? Worth measuring explicitly in the step 7 rehearsal rather than assuming.
-3. FantasyPros ECR carries no scoring-format variant in the nflverse feed, but this league is full PPR, which shifts RB/WR balance materially. Quantify how far the generic board sits from a PPR-correct one before leaning on it — the rank→points curve in step 6 is fit on this league's own scoring, so this may resolve itself.
+1. Does the flat scarcity gradient in an 8-team league leave enough draft-day edge to be worth the modeling, or does the real advantage sit in weekly lineups and waivers? Worth measuring explicitly in the step 7 rehearsal rather than assuming.
+2. FantasyPros ECR carries no scoring-format variant in the nflverse feed, but this league is full PPR, which shifts RB/WR balance materially. Quantify how far the generic board sits from a PPR-correct one before leaning on it — the rank→points curve in step 6 is fit on this league's own scoring, so this may resolve itself.
 
-**Resolved:** the league has 2024 and 2025 history reachable through the API (the web UI hides it from members who joined later), so both the box-score reconciliation gate and the draft opponent model have real data. 2024 ran 9 teams and a 14-week season; 2025 ran 8 teams over 13 weeks and 2026 runs 8 teams over 14, all full PPR, so anything fit across seasons must normalize for size and season length.
+**Resolved:** the draft happened on 4 September 2026 and the season is being run live — see "Running it during the season". Also, the league has 2024 and 2025 history reachable through the API (the web UI hides it from members who joined later), so both the box-score reconciliation gate and the draft opponent model have real data. 2024 ran 9 teams and a 14-week season; 2025 ran 8 teams over 13 weeks and 2026 runs 8 teams over 14, all full PPR, so anything fit across seasons must normalize for size and season length.
