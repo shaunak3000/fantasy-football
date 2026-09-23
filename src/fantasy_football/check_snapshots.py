@@ -54,9 +54,12 @@ def main(argv: list[str]) -> int:
     print(f"\n  {len(captured)} week(s) captured, through week {max(captured)}.")
     if missing:
         print(f"  MISSING AND UNRECOVERABLE: {', '.join(str(w) for w in missing)}")
-    pending = [w for w, s in weeks.items() if not s.has_results]
+    # `has_results` is true once anybody has scored, which a Thursday capture
+    # satisfies while missing 100+ stat lines. What matters is whether the
+    # scores were pulled after the week ended — see `results_final`.
+    pending = sorted(w for w, s in weeks.items() if not s.results_final)
     if pending:
-        print(f"  Still awaiting results (rerun later to fill in): {pending}")
+        print(f"  Still awaiting results (rerun weekly.py to fill in): {pending}")
     if max(captured) < LIKELY_LAST_WEEK:
         print(
             f"  Weeks {max(captured) + 1}-{LIKELY_LAST_WEEK} still to come "

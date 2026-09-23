@@ -81,6 +81,10 @@ class WeekSnapshot:
     teams: dict[int, list[PlayerSnapshot]]
     records: dict[int, tuple[int, int, float]]
     names: dict[int, str]
+    #: The league's live scoring period when these stat lines were pulled. Once
+    #: it exceeds `week`, the week was over and the scores are final. None in
+    #: files written before this was tracked, which get one refetch to set it.
+    results_week: int | None = None
 
     @property
     def trustworthy(self) -> bool:
@@ -92,6 +96,24 @@ class WeekSnapshot:
         return any(
             player.actual is not None for players in self.teams.values() for player in players
         )
+
+    @property
+    def results_final(self) -> bool:
+        """Whether the stat lines here were collected after the week finished.
+
+        Completeness cannot be read off the players. `has_results` is true as
+        soon as anyone has scored, which a Thursday capture satisfies while 100+
+        stat lines are still missing — week 1 sat at 20 of 126 while reporting
+        results. But "every starter has an `actual`" is wrong in the other
+        direction: ESPN publishes no stat line at all for a player who was
+        started and did not play, so week 2 had three permanent holes (Puka
+        Nacua, Nico Collins, Zay Flowers were all started while inactive) and
+        would have been re-fetched forever.
+
+        So the question is not what the file contains but when it was filled:
+        scores pulled once the week was over are as final as they will ever be.
+        """
+        return self.results_week is not None and self.results_week > self.week
 
 
 def _stat(player: dict, source: int, week: int) -> dict | None:
@@ -148,6 +170,7 @@ def capture(league: League, week: int, season: int | None = None) -> WeekSnapsho
         week=week,
         captured_at=datetime.now(UTC).isoformat(timespec="seconds"),
         nfl_week_at_capture=live_week,
+        results_week=live_week,
         schema=SCHEMA_VERSION,
         teams=teams,
         records={
@@ -201,6 +224,7 @@ def save(snapshot: WeekSnapshot, force: bool = False) -> tuple[Path | None, str]
         "week": snapshot.week,
         "captured_at": snapshot.captured_at,
         "nfl_week_at_capture": snapshot.nfl_week_at_capture,
+        "results_week": snapshot.results_week,
         "schema": snapshot.schema,
         "names": {str(k): v for k, v in snapshot.names.items()},
         "records": {str(k): list(v) for k, v in snapshot.records.items()},
@@ -240,6 +264,9 @@ def _with_results_from(kept: WeekSnapshot, fresh: WeekSnapshot) -> WeekSnapshot:
         teams=teams,
         captured_at=kept.captured_at,
         records=fresh.records or kept.records,
+        # The slots stay as recorded, but the scores are as fresh as this pull —
+        # which is what decides whether anyone needs to come back for them.
+        results_week=fresh.nfl_week_at_capture,
     )
 
 
@@ -253,6 +280,7 @@ def load(season: int, week: int) -> WeekSnapshot | None:
         week=raw["week"],
         captured_at=raw["captured_at"],
         nfl_week_at_capture=raw.get("nfl_week_at_capture", raw["week"]),
+        results_week=raw.get("results_week"),
         schema=raw.get("schema", 1),
         teams={
             int(team_id): [PlayerSnapshot(**p) for p in players]
@@ -274,6 +302,23 @@ def load_season(season: int) -> list[WeekSnapshot]:
         if snapshot is not None:
             weeks.append(snapshot)
     return weeks
+
+
+def weeks_awaiting_results(season: int, before_week: int) -> list[int]:
+    """Already-captured weeks, now finished, whose stat lines are still missing.
+
+    A week captured while it was live carries real lineups and no scores, and
+    nothing ever went back for them — so the snapshots held what managers
+    started but not what it was worth, which is half of what a lineup backtest
+    needs. Re-capturing a finished week is safe: ESPN keeps stat lines per week
+    forever, and `save` merges only `actual`, keeping the slots already
+    recorded.
+    """
+    return sorted(
+        snapshot.week
+        for snapshot in load_season(season)
+        if snapshot.week < before_week and not snapshot.results_final
+    )
 
 
 def capture_and_save(league: League, week: int, season: int | None = None) -> str:

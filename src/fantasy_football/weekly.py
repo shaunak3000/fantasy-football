@@ -21,7 +21,7 @@ from espn_api.football import League
 
 from .config import load_credentials
 from .data.espn import fetch_raw_settings, fetch_weekly_projections, parse_settings
-from .data.snapshots import capture_and_save
+from .data.snapshots import capture_and_save, weeks_awaiting_results
 from .draft.cache import load_bundle
 from .draft.live import my_team_id
 from .lineup.optimizer import best_lineup_against, optimize
@@ -194,7 +194,16 @@ def main(argv: list[str]) -> int:
     # the *live* scoring period, not the week being reported on, and it never
     # raises: a failed snapshot must not take the report down with it.
     live_week = max(int(getattr(league, "nfl_week", week) or week), 1)
-    print(f"_Snapshot: {capture_and_save(league, live_week, season)}._\n")
+    captures = [capture_and_save(league, live_week, season)]
+
+    # The live capture has the lineups but no scores — the games have not been
+    # played. Nothing used to come back for them, so the record was half of what
+    # a lineup backtest needs. Finished weeks missing stat lines are re-fetched
+    # here; `save` merges only `actual` and keeps the slots recorded at the time.
+    for finished_week in weeks_awaiting_results(season, live_week):
+        captures.append(capture_and_save(league, finished_week, season))
+
+    print(f"_Snapshot: {'; '.join(captures)}._\n")
 
     # One baseline, computed once, shared by every section below. The standings
     # table, the waiver deltas and the trade deltas are all differences against

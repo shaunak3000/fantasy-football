@@ -41,12 +41,13 @@ def player(espn_id, slot_id, actual=None, name=None):
     )
 
 
-def snapshot(week, nfl_week, players, season=2026):
+def snapshot(week, nfl_week, players, season=2026, results_week="same"):
     return WeekSnapshot(
         season=season,
         week=week,
         captured_at=f"2026-09-0{week}T12:00:00+00:00",
         nfl_week_at_capture=nfl_week,
+        results_week=nfl_week if results_week == "same" else results_week,
         schema=1,
         teams={1: players},
         records={1: (0, 0, 0.0)},
@@ -106,6 +107,47 @@ class TestResultsArriveLate:
         snapshots.save(snapshot(7, 7, [player(1, 2)]))
         path, reason = snapshots.save(snapshot(7, 9, [player(1, 20)]))
         assert path is None and "refused" in reason
+
+
+class TestKnowingWhatIsStillMissing:
+    """A week captured live has lineups and no scores, and something has to come
+    back for them. Deciding when to stop coming back is the whole difficulty."""
+
+    def test_scores_pulled_while_the_week_was_live_are_not_final(self):
+        partial = snapshot(3, 3, [player(1, 2, actual=8.0)], results_week=3)
+        assert partial.has_results
+        assert not partial.results_final
+
+    def test_scores_pulled_after_the_week_ended_are_final(self):
+        assert snapshot(3, 3, [player(1, 2, actual=8.0)], results_week=4).results_final
+
+    def test_a_started_player_who_never_played_does_not_hold_a_week_open(self):
+        """ESPN publishes no stat line at all for someone started while inactive
+        — three of them in week 2 of 2026. Waiting for those waits forever."""
+        never = snapshot(3, 3, [player(1, 2, actual=None)], results_week=5)
+        assert never.results_final
+
+    def test_a_legacy_file_with_no_recorded_pull_gets_one_refetch(self):
+        assert not snapshot(3, 3, [player(1, 2, actual=8.0)], results_week=None).results_final
+
+    def test_it_lists_finished_weeks_whose_scores_are_not_yet_final(self):
+        snapshots.save(snapshot(1, 1, [player(1, 2, actual=5.0)], results_week=2))
+        snapshots.save(snapshot(2, 2, [player(1, 2, actual=None)], results_week=2))
+        snapshots.save(snapshot(3, 3, [player(1, 2, actual=None)], results_week=3))
+        assert snapshots.weeks_awaiting_results(2026, before_week=3) == [2]
+
+    def test_the_live_week_is_never_listed(self):
+        snapshots.save(snapshot(4, 4, [player(1, 2, actual=None)], results_week=4))
+        assert snapshots.weeks_awaiting_results(2026, before_week=4) == []
+
+    def test_a_refetched_week_stops_being_listed(self):
+        snapshots.save(snapshot(2, 2, [player(1, 2, actual=None)], results_week=2))
+        assert snapshots.weeks_awaiting_results(2026, before_week=5) == [2]
+        snapshots.save(snapshot(2, 5, [player(1, 2, actual=11.0)]))
+        assert snapshots.weeks_awaiting_results(2026, before_week=5) == []
+
+    def test_nothing_captured_means_nothing_to_collect(self):
+        assert snapshots.weeks_awaiting_results(2026, before_week=5) == []
 
 
 class TestRoundTrip:
