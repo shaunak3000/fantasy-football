@@ -21,7 +21,8 @@ from espn_api.football import League
 
 from .config import load_credentials
 from .data.espn import fetch_raw_settings, fetch_weekly_projections, parse_settings
-from .data.snapshots import capture_and_save, weeks_awaiting_results
+from .data.injuries import league_return_weeks, source_of
+from .data.snapshots import capture_and_save, load_season, weeks_awaiting_results
 from .draft.cache import load_bundle
 from .draft.live import my_team_id
 from .lineup.optimizer import best_lineup_against, optimize
@@ -98,6 +99,17 @@ def _lineup_section(state, my_id, settings, week) -> list:
     on_bye = [p for p in week_roster if p.on_bye]
     if on_bye:
         print(f"\n  ON BYE this week (worth 0): {', '.join(p.player for p in on_bye)}")
+    # Long absences change every trade that touches the position, so the
+    # assumption is printed rather than buried: edit data/injury_returns.json
+    # when the news disagrees.
+    later = sorted(
+        (p for p in state.rosters[my_id] if getattr(p, "return_week", None)),
+        key=lambda p: p.return_week,
+    )
+    if later:
+        season = getattr(settings, "season", SEASON)
+        notes = [f"{p.player} wk{p.return_week} ({source_of(p.player, season)})" for p in later]
+        print("\n  BACK LATER: " + ", ".join(notes))
 
     # A bye collision two weeks out is fixable now and unfixable then, so the
     # report looks ahead rather than only at the week in front of you.
@@ -172,6 +184,9 @@ def main(argv: list[str]) -> int:
     # Hoisted rather than called inline: the streaming check below needs the same
     # numbers, and this is a 900-player request not worth making twice.
     published = fetch_weekly_projections(league, week)
+    # ESPN publishes no return dates. These come from data/injury_returns.json
+    # where the news is known, and the IR four-game floor where it is not.
+    returning = league_return_weeks(published, week, season, load_season(season))
     state = build_state(
         league,
         settings,
@@ -180,6 +195,7 @@ def main(argv: list[str]) -> int:
         current_week=week,
         byes=bye_weeks_by_espn_id() if season == SEASON else {},
         weekly_projections=published,
+        return_weeks=returning,
     )
 
     my_id = my_team_id(league, creds.swid)
@@ -220,6 +236,8 @@ def main(argv: list[str]) -> int:
         banked=state.banked,
         trials=SIM_TRIALS,
         mean_uncertainty=PROJECTION_MEAN_UNCERTAINTY,
+        # Every remaining week at its own strength, byes where they fall.
+        current_week=state.current_week,
     )
     baseline = context.outcome(state.rosters)
     stderr = baseline.standard_error(my_id)
@@ -266,6 +284,8 @@ def main(argv: list[str]) -> int:
     for advice in useful:
         print(f"  {advice.move.summary()}")
         print(f"      {advice.points_gain:+.1f} pts/week to the lineup — {advice.verdict}")
+        for use in advice.move.incoming:
+            print(f"      {use.summary()}")
 
     # Defence is the one position where the weekly matchup is worth chasing —
     # about 8% of variation against 2-3% for skill players — and the one the
@@ -299,13 +319,39 @@ def main(argv: list[str]) -> int:
     )
     if not trades:
         print("  Nothing mutually beneficial found this week.")
-    for move in trades[:4]:
-        print(
-            f"  {move.summary()}  |  {state.names.get(move.counterparty_id, '?')}: "
-            f"{move.counterparty_delta:+.2%} +/-{move.counterparty_stderr:.2%}"
-        )
+    for move in trades[:5]:
+        _print_trade(move, state.names.get(move.counterparty_id, "?").strip())
 
     return 0
+
+
+def _print_trade(move, partner: str) -> None:
+    """One deal, measured the same way for both sides.
+
+    The other side's numbers are not decoration. A proposal they refuse is worth
+    nothing, and the usual reason to refuse is visible here: a bad week of their
+    own, or a player coming to them who would only cover a bye.
+    """
+    print(f"  {move.description}   [{partner}]")
+    print(
+        f"      title    you {move.title_delta:+.2%} +/-{move.title_stderr:.2%}"
+        f"    them {move.counterparty_delta:+.2%} +/-{move.counterparty_stderr:.2%}"
+    )
+    if move.weekly_delta:
+        ours, theirs = move.worst_week(), move.worst_week("them")
+        print(
+            f"      season   you {move.season_points_change:+.1f} pts"
+            f"          them {move.counterparty_season_points_change:+.1f} pts"
+        )
+        print(
+            f"      worst    you wk{ours[0]} {ours[1]:+.1f}"
+            f"            them wk{theirs[0]} {theirs[1]:+.1f}"
+        )
+    for use in move.incoming:
+        print(f"      in   {use.summary()}")
+    for use in move.outgoing:
+        print(f"      out  {use.summary()}  (for them)")
+    print()
 
 
 if __name__ == "__main__":

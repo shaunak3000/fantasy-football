@@ -27,8 +27,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from itertools import combinations
 
+from ..lineup.fast import best_points, is_greedy_exact
 from ..lineup.optimizer import optimize
 from ..season.simulator import SeasonOutcome, TeamSeason, paired_delta, simulate
+from ..season.weekly_profile import PlayerUsage, season_total, usage, weekly_points
 
 #: Enough trials that the noise floor on a delta sits near a tenth of a point of
 #: title probability. The simulation is vectorized, so this costs milliseconds;
@@ -61,7 +63,91 @@ class SimulationContext:
     #: Left at zero the simulation treats a projection as a known fact and comes
     #: out overconfident — see `check_simulator`.
     mean_uncertainty: float = 0.0
+    #: The NFL week the schedule starts from. With it, every remaining week is
+    #: valued separately — byes fall where they fall — and the simulator plays
+    #: each week at its own strength. Without it, the old flat valuation.
+    current_week: int | None = None
     _strengths: dict = field(default_factory=dict, repr=False)
+    _points: dict = field(default_factory=dict, repr=False)
+    _profiles: dict = field(default_factory=dict, repr=False)
+
+    @property
+    def weeks(self) -> list[int]:
+        """NFL week numbers of the remaining schedule, in order."""
+        if self.current_week is None:
+            return []
+        length = max((len(games) for games in self.schedule.values()), default=0)
+        return [self.current_week + offset for offset in range(length)]
+
+    def _key(self, roster: list) -> tuple:
+        return tuple(sorted(map(str, (_identity(p) for p in roster))))
+
+    def points(self, roster: list) -> float:
+        """Full-strength lineup points, the fast way.
+
+        Identical to `strength(roster)[0]` — `tests/test_fast_lineup.py` holds
+        the two to the same answer on randomised rosters — but about a thousand
+        times cheaper, which is what lets the trade search go to full depth.
+        Leagues where greedy filling is not provably exact use the solver.
+        """
+        key = self._key(roster)
+        cached = self._points.get(key)
+        if cached is None:
+            if is_greedy_exact(self.settings):
+                cached = best_points(roster, self.settings)
+            else:
+                cached = self.strength(roster)[0]
+            self._points[key] = cached
+        return cached
+
+    def profile(self, roster: list) -> tuple[float, ...]:
+        """Lineup points in each remaining week, with byes and injuries out."""
+        if self.current_week is None or not is_greedy_exact(self.settings):
+            return ()
+        key = self._key(roster)
+        cached = self._profiles.get(key)
+        if cached is None:
+            cached = weekly_points(roster, self.weeks, self.current_week, self.settings)
+            self._profiles[key] = cached
+        return cached
+
+    @property
+    def first_playoff_week(self) -> int | None:
+        if self.current_week is None:
+            return None
+        regular = getattr(self.settings, "regular_season_weeks", None)
+        if regular:
+            return int(regular) + 1
+        return (self.weeks[-1] + 1) if self.weeks else None
+
+    def playoff_points(self, roster: list) -> float:
+        """Full-strength points for the bracket, without anyone still injured then.
+
+        A player out until week 8 is part of the playoff lineup; one out for the
+        season is not, and counting him would overstate a team in exactly the
+        games that decide the title.
+        """
+        first = self.first_playoff_week
+        if first is None:
+            return self.strength(roster)[0]
+        healthy = [
+            p for p in roster if getattr(p, "return_week", None) is None or p.return_week <= first
+        ]
+        if len(healthy) == len(roster):
+            return self.strength(roster)[0]
+        return self.points(healthy)
+
+    def season_points(self, roster: list) -> float:
+        """Total points over the remaining season, byes included.
+
+        This is what the trade screen ranks on. A trade that is a point a week
+        better at full strength but loses the week three starters are on bye is
+        not the same trade as one that is a point a week better every week.
+        """
+        weekly = self.profile(roster)
+        if weekly:
+            return float(sum(weekly))
+        return self.points(roster) * max(len(self.weeks), 1)
 
     def strength(self, roster: list) -> tuple[float, float]:
         """Weekly mean and spread of the best lineup this roster can start."""
@@ -88,6 +174,11 @@ class SimulationContext:
                     losses=losses,
                     points_for=points,
                     mean_uncertainty=self.mean_uncertainty,
+                    # Each week at its own strength; the bracket at full strength,
+                    # since NFL byes are over by the fantasy playoffs — minus anyone
+                    # whose injury runs past them.
+                    weekly_means=self.profile(roster) or None,
+                    playoff_mean=self.playoff_points(roster),
                 )
             )
         return simulate(
@@ -106,6 +197,41 @@ class MoveEvaluation:
     counterparty_before: float = 0.0
     counterparty_after: float = 0.0
     counterparty_stderr: float = 0.0
+    counterparty_weekly_points_change: float = 0.0
+    #: NFL week numbers the two profiles below refer to.
+    weeks: tuple[int, ...] = ()
+    #: Lineup points gained in each remaining week, byes and injuries included.
+    weekly_delta: tuple[float, ...] = ()
+    counterparty_weekly_delta: tuple[float, ...] = ()
+    #: How often each incoming player would start for us, and in which weeks.
+    incoming: tuple[PlayerUsage, ...] = ()
+    #: The same for what we send, on the other side's roster. A proposal they
+    #: refuse is worthless, and "your guy only covers one of my byes" is the most
+    #: common reason to refuse — so it is measured the same way on both sides.
+    outgoing: tuple[PlayerUsage, ...] = ()
+
+    @property
+    def season_points_change(self) -> float:
+        return float(sum(self.weekly_delta))
+
+    @property
+    def counterparty_season_points_change(self) -> float:
+        return float(sum(self.counterparty_weekly_delta))
+
+    def worst_week(self, side: str = "us") -> tuple[int, float] | None:
+        """The week this move hurts most, which is often a bye week."""
+        delta = self.weekly_delta if side == "us" else self.counterparty_weekly_delta
+        if not delta:
+            return None
+        index = min(range(len(delta)), key=lambda i: delta[i])
+        return self.weeks[index], delta[index]
+
+    def best_week(self, side: str = "us") -> tuple[int, float] | None:
+        delta = self.weekly_delta if side == "us" else self.counterparty_weekly_delta
+        if not delta:
+            return None
+        index = max(range(len(delta)), key=lambda i: delta[i])
+        return self.weeks[index], delta[index]
 
     @property
     def title_delta(self) -> float:
@@ -221,11 +347,36 @@ def evaluate_move(
     )
 
     before = baseline if baseline is not None else context.outcome(rosters)
-    before_mean, _ = context.strength(rosters[my_team_id])
+    before_mean = context.points(rosters[my_team_id])
 
     updated = apply_move(rosters, my_team_id, add, drop, counterparty_id)
     after = context.outcome(updated)
-    after_mean, _ = context.strength(updated[my_team_id])
+    after_mean = context.points(updated[my_team_id])
+
+    # Both sides, the same way. What matters to them is what matters to us: the
+    # points, the weeks, and whether the players changing hands actually play.
+    weeks = tuple(context.weeks)
+    weekly_delta = _profile_delta(context, rosters[my_team_id], updated[my_team_id])
+    counterparty_weekly_delta: tuple[float, ...] = ()
+    counterparty_change = 0.0
+    incoming: tuple[PlayerUsage, ...] = ()
+    outgoing: tuple[PlayerUsage, ...] = ()
+    if weeks:
+        incoming = tuple(
+            usage(p, updated[my_team_id], list(weeks), context.current_week, settings) for p in add
+        )
+    if counterparty_id is not None:
+        counterparty_change = context.points(updated[counterparty_id]) - context.points(
+            rosters[counterparty_id]
+        )
+        counterparty_weekly_delta = _profile_delta(
+            context, rosters[counterparty_id], updated[counterparty_id]
+        )
+        if weeks:
+            outgoing = tuple(
+                usage(p, updated[counterparty_id], list(weeks), context.current_week, settings)
+                for p in drop
+            )
 
     delta, stderr = paired_delta(before, after, my_team_id)
     counterparty_delta, counterparty_stderr = (
@@ -255,7 +406,21 @@ def evaluate_move(
         counterparty_before=counterparty_before,
         counterparty_after=counterparty_before + counterparty_delta,
         counterparty_stderr=counterparty_stderr,
+        counterparty_weekly_points_change=counterparty_change,
+        weeks=weeks,
+        weekly_delta=weekly_delta,
+        counterparty_weekly_delta=counterparty_weekly_delta,
+        incoming=incoming,
+        outgoing=outgoing,
     )
+
+
+def _profile_delta(context: SimulationContext, before: list, after: list) -> tuple[float, ...]:
+    """Points gained in each remaining week by going from `before` to `after`."""
+    a, b = context.profile(before), context.profile(after)
+    if not a or not b:
+        return ()
+    return tuple(round(y - x, 4) for x, y in zip(a, b, strict=True))
 
 
 def marginal_cost(roster: list, player, context: SimulationContext) -> float:
@@ -269,12 +434,12 @@ def marginal_cost(roster: list, player, context: SimulationContext) -> float:
     nothing.
     """
     without = [p for p in roster if _identity(p) != _identity(player)]
-    return context.strength(roster)[0] - context.strength(without)[0]
+    return context.points(roster) - context.points(without)
 
 
 def marginal_gain(roster: list, player, context: SimulationContext) -> float:
     """Points a week this player would add to the roster, before any drop."""
-    return context.strength([*roster, player])[0] - context.strength(roster)[0]
+    return context.points([*roster, player]) - context.points(roster)
 
 
 def find_trades(
@@ -285,13 +450,13 @@ def find_trades(
     schedule: dict[int, list[int | None]],
     playoff_teams: int,
     banked: dict[int, tuple[int, int, float]] | None = None,
-    give_depth: int = 5,
-    get_depth: int = 4,
+    give_depth: int | None = None,
+    get_depth: int | None = None,
     trials: int = DEFAULT_TRIALS,
     context: SimulationContext | None = None,
     baseline: SeasonOutcome | None = None,
     package_sizes: tuple[int, ...] = (1, 2),
-    shortlist: int = 12,
+    shortlist: int = 40,
 ) -> list[MoveEvaluation]:
     """Search opponent rosters for swaps that help both sides.
 
@@ -322,28 +487,53 @@ def find_trades(
         trials=trials,
     )
     baseline = baseline if baseline is not None else context.outcome(rosters)
-    my_before = context.strength(my_roster)[0]
 
-    # Offer what costs least, not what scores least.
-    give_pool = sorted(my_roster, key=lambda p: marginal_cost(my_roster, p, context))[:give_depth]
+    # Screen on the whole remaining season, byes included, not one flat week. A
+    # deal that is +2.3 a week at full strength but -3.7 the week three starters
+    # are on bye is a different deal, and only the season total can rank them.
+    weeks, current = context.weeks, context.current_week
 
-    screened: list[tuple[float, dict, int, list, list]] = []
+    def season(roster: list) -> float:
+        if weeks and is_greedy_exact(context.settings):
+            return season_total(roster, weeks, current, context.settings)
+        return context.points(roster)
+
+    my_before = season(my_roster)
+
+    # The whole roster by default. The pools used to be cut to the top few by
+    # standalone value, which is blind to swaps: DK Metcalf adds nothing to a
+    # lineup that already starts three better receivers, so he never entered the
+    # pool — yet Metcalf *for* Nico Collins, whom he replaces, was the best deal
+    # on the board. The package is scored as a whole below; the pool must not
+    # pre-judge its members one at a time. Depth caps remain for callers who want
+    # a quicker, narrower search.
+    give_pool = sorted(my_roster, key=lambda p: marginal_cost(my_roster, p, context))
+    if give_depth is not None:
+        give_pool = give_pool[:give_depth]
+
+    screened: list[tuple[float, None, int, list, list]] = []
     for team_id, roster in rosters.items():
         if team_id == my_team_id or not roster:
             continue
-        their_before = context.strength(roster)[0]
-        get_pool = sorted(roster, key=lambda p: marginal_gain(my_roster, p, context), reverse=True)[
-            :get_depth
-        ]
+        their_before = season(roster)
+        get_pool = sorted(roster, key=lambda p: marginal_gain(my_roster, p, context), reverse=True)
+        if get_depth is not None:
+            get_pool = get_pool[:get_depth]
 
         for size in package_sizes:
             if size > len(give_pool) or size > len(get_pool):
                 continue
-            for give in combinations(give_pool, size):
-                for get in combinations(get_pool, size):
-                    updated = apply_move(rosters, my_team_id, list(get), list(give), team_id)
-                    my_gain = context.strength(updated[my_team_id])[0] - my_before
-                    their_gain = context.strength(updated[team_id])[0] - their_before
+            give_packages = list(combinations(give_pool, size))
+            for get in combinations(get_pool, size):
+                get_ids = {id(p) for p in get}
+                their_kept = [p for p in roster if id(p) not in get_ids]
+                for give in give_packages:
+                    give_ids = {id(p) for p in give}
+                    my_after = [p for p in my_roster if id(p) not in give_ids] + list(get)
+                    my_gain = season(my_after) - my_before
+                    if my_gain <= 0:
+                        continue
+                    their_gain = season(their_kept + list(give)) - their_before
                     # A proposal they refuse is worthless, so both sides must
                     # gain on points before it is worth a simulation.
                     if my_gain <= 0 or their_gain <= 0:
@@ -356,7 +546,7 @@ def find_trades(
                     # direct rival the division. Those get refused, and they
                     # crowd out the balanced deals that would not have been.
                     screened.append(
-                        (min(my_gain, their_gain), updated, team_id, list(get), list(give))
+                        (min(my_gain, their_gain), None, team_id, list(get), list(give))
                     )
 
     screened.sort(key=lambda row: -row[0])
@@ -381,7 +571,34 @@ def find_trades(
             accepted.append(move)
 
     accepted.sort(key=lambda p: -p.title_delta)
-    return accepted
+    return _distinct(accepted)
+
+
+def _distinct(moves: list[MoveEvaluation]) -> list[MoveEvaluation]:
+    """One entry per real deal, dropping copies that differ only by a throw-in.
+
+    Packages are built at equal sizes, so a two-for-one arrives several times,
+    each padded with a different player who would never start — the top four
+    results in week 3 of 2026 were all Chase Brown for Collins and Javonte, with
+    Caleb Williams, Zach Charbonnet, the 49ers defence or Patrick Mahomes
+    attached. Those are the same trade. The best-scoring copy is kept.
+
+    Without usage data there is nothing to judge a throw-in by, so every move is
+    kept as its own deal.
+    """
+    kept: dict[tuple, MoveEvaluation] = {}
+    for move in moves:
+        if not move.incoming and not move.outgoing:
+            kept[(id(move),)] = move
+            continue
+        core = (
+            move.counterparty_id,
+            frozenset(u.player for u in move.incoming if u.role != "depth"),
+            frozenset(u.player for u in move.outgoing if u.role != "depth"),
+        )
+        if core not in kept or move.title_delta > kept[core].title_delta:
+            kept[core] = move
+    return sorted(kept.values(), key=lambda m: -m.title_delta)
 
 
 @dataclass(frozen=True)

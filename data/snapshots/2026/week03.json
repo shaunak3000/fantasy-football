@@ -1,14 +1,14 @@
 {
-  "captured_at": "2026-09-23T17:33:31+00:00",
+  "captured_at": "2026-09-26T00:05:24+00:00",
   "names": {
     "1": "Running Back to Last",
-    "10": "itsaRBpartynow",
+    "10": "FeelBalancedNow?",
     "4": "T Money",
     "5": "Winston's Losers",
     "6": " Sam rice ",
     "7": "Back 2 Back",
     "8": "Waymo Points Than You",
-    "9": "Nice glass of Charbonnet "
+    "9": "53 Crab Legs"
   },
   "nfl_week_at_capture": 3,
   "records": {
@@ -59,12 +59,12 @@
   "teams": {
     "1": [
       {
-        "actual": null,
+        "actual": 35.3,
         "espn_id": 4430807,
         "injury_status": "ACTIVE",
         "name": "Bijan Robinson",
         "position": "RB",
-        "projected": 19.57154766,
+        "projected": 19.57128408,
         "slot_id": 2
       },
       {
@@ -73,7 +73,7 @@
         "injury_status": "ACTIVE",
         "name": "Omarion Hampton",
         "position": "RB",
-        "projected": 15.05610351,
+        "projected": 15.05175482,
         "slot_id": 2
       },
       {
@@ -83,7 +83,7 @@
         "name": "Rashee Rice",
         "position": "WR",
         "projected": 12.74721762,
-        "slot_id": 4
+        "slot_id": 20
       },
       {
         "actual": null,
@@ -91,7 +91,7 @@
         "injury_status": "ACTIVE",
         "name": "D'Andre Swift",
         "position": "RB",
-        "projected": 12.71141209,
+        "projected": 12.8554396,
         "slot_id": 23
       },
       {
@@ -100,17 +100,17 @@
         "injury_status": "ACTIVE",
         "name": "Justin Herbert",
         "position": "QB",
-        "projected": 17.28975196,
+        "projected": 17.29130384,
         "slot_id": 0
       },
       {
-        "actual": null,
+        "actual": 6.6,
         "espn_id": 4572680,
         "injury_status": "ACTIVE",
         "name": "Tucker Kraft",
         "position": "TE",
-        "projected": 10.28689224,
-        "slot_id": 6
+        "projected": 10.28225784,
+        "slot_id": 20
       },
       {
         "actual": null,
@@ -118,7 +118,7 @@
         "injury_status": null,
         "name": "Texans D/ST",
         "position": "D/ST",
-        "projected": 9.31477437,
+        "projected": 9.24162534,
         "slot_id": 16
       },
       {
@@ -127,7 +127,7 @@
         "injury_status": "ACTIVE",
         "name": "Kyle Monangai",
         "position": "RB",
-        "projected": 8.40790234,
+        "projected": 8.47735697,
         "slot_id": 20
       },
       {
@@ -154,7 +154,7 @@
         "injury_status": "QUESTIONABLE",
         "name": "Zay Flowers",
         "position": "WR",
-        "projected": 15.6603832,
+        "projected": 15.66837991,
         "slot_id": 21
       },
       {
@@ -163,7 +163,7 @@
         "injury_status": "ACTIVE",
         "name": "Garrett Wilson",
         "position": "WR",
-        "projected": 14.73533028,
+        "projected": 14.72476891,
         "slot_id": 4
       },
       {
@@ -181,7 +181,7 @@
         "injury_status": "ACTIVE",
         "name": "Rashod Bateman",
         "position": "WR",
-        "projected": 7.63188489,
+        "projected": 7.63555448,
         "slot_id": 20
       },
       {
@@ -190,8 +190,8 @@
         "injury_status": "ACTIVE",
         "name": "Josh Downs",
         "position": "WR",
-        "projected": 11.47373052,
-        "slot_id": 20
+        "projected": 12.01019059,
+        "slot_id": 4
       },
       {
         "actual": null,
@@ -208,16 +208,16 @@
         "injury_status": "ACTIVE",
         "name": "Dalton Schultz",
         "position": "TE",
-        "projected": 9.52961715,
-        "slot_id": 20
+        "projected": 10.99401296,
+        "slot_id": 6
       },
       {
-        "actual": null,
-        "espn_id": 4702555,
+        "actual": 21.0,
+        "espn_id": 4701936,
         "injury_status": "ACTIVE",
-        "name": "Jonah Coleman",
-        "position": "RB",
-        "projected": 1.70413382,
+        "name": "Matthew Golden",
+        "position": "WR",
+        "projected": 11.41982995,
         "slot_id": 20
       }
     ],
@@ -228,7 +228,7 @@
         "injury_status": "ACTIVE",
         "name": "Amon-Ra St. Brown",
         "position": "WR",
-        "projected": 19.87082815,
+        "projected": 19.87082857,
         "slot_id": 4
       },
       {
@@ -252,11 +252,11 @@
       {
         "actual": null,
         "espn_id": 4258173,
-        "injury_status": "QUESTIONABLE",
+        "injury_status": "OUT",
         "name": "Nico Collins",
         "position": "WR",
-        "projected": 15.79739075,
-        "slot_id": 23
+        "projected": 0.0,
+        "slot_id": 20
       },
       {
         "actual": null,
@@ -265,7 +265,7 @@
         "name": "Drake Maye",
         "position": "QB",
         "projected": 18.67838225,
-        "slot_id": 0
+        "slot_id": 20
       },
       {
         "actual": null,
@@ -273,8 +273,8 @@
         "injury_status": "ACTIVE",
         "name": "Joe Burrow",
         "position": "QB",
-        "projected": 16.45230478,
-        "slot_id": 20
+        "projected": 16.45226052,
+        "slot_id": 0
       },
       {
         "actual": null,
@@ -282,7 +282,7 @@
         "injury_status": "ACTIVE",
         "name": "Harold Fannin Jr.",
         "position": "TE",
-        "projected": 9.79611946,
+        "projected": 9.79612002,
         "slot_id": 20
       },
       {
@@ -291,7 +291,7 @@
         "injury_status": "QUESTIONABLE",
         "name": "Jaylen Warren",
         "position": "RB",
-        "projected": 13.29490868,
+        "projected": 14.95069617,
         "slot_id": 2
       },
       {
@@ -306,10 +306,10 @@
       {
         "actual": null,
         "espn_id": 4038815,
-        "injury_status": "QUESTIONABLE",
+        "injury_status": "OUT",
         "name": "Rico Dowdle",
         "position": "RB",
-        "projected": 10.40582731,
+        "projected": 0.0,
         "slot_id": 20
       },
       {
@@ -327,8 +327,8 @@
         "injury_status": null,
         "name": "Eagles D/ST",
         "position": "D/ST",
-        "projected": 8.17575762,
-        "slot_id": 20
+        "projected": 10.68907659,
+        "slot_id": 16
       },
       {
         "actual": null,
@@ -336,7 +336,7 @@
         "injury_status": "ACTIVE",
         "name": "Eddy Pineiro",
         "position": "K",
-        "projected": 11.73956176,
+        "projected": 11.73928051,
         "slot_id": 17
       },
       {
@@ -345,7 +345,7 @@
         "injury_status": "QUESTIONABLE",
         "name": "Michael Pittman Jr.",
         "position": "WR",
-        "projected": 11.37994006,
+        "projected": 11.36447137,
         "slot_id": 20
       },
       {
@@ -354,8 +354,8 @@
         "injury_status": "ACTIVE",
         "name": "Kyren Williams",
         "position": "RB",
-        "projected": 12.60351445,
-        "slot_id": 20
+        "projected": 12.99153147,
+        "slot_id": 23
       },
       {
         "actual": null,
@@ -363,7 +363,7 @@
         "injury_status": "ACTIVE",
         "name": "Javonte Williams",
         "position": "RB",
-        "projected": 15.03542737,
+        "projected": 15.03536078,
         "slot_id": 2
       },
       {
@@ -381,8 +381,8 @@
         "injury_status": null,
         "name": "Lions D/ST",
         "position": "D/ST",
-        "projected": 9.48666202,
-        "slot_id": 16
+        "projected": 9.41357886,
+        "slot_id": 20
       }
     ],
     "4": [
@@ -392,7 +392,7 @@
         "injury_status": "ACTIVE",
         "name": "Christian McCaffrey",
         "position": "RB",
-        "projected": 20.92944821,
+        "projected": 20.92941031,
         "slot_id": 2
       },
       {
@@ -410,7 +410,7 @@
         "injury_status": "ACTIVE",
         "name": "Colston Loveland",
         "position": "TE",
-        "projected": 9.89937167,
+        "projected": 9.69700555,
         "slot_id": 6
       },
       {
@@ -419,7 +419,7 @@
         "injury_status": "ACTIVE",
         "name": "Kenneth Walker III",
         "position": "RB",
-        "projected": 21.04870177,
+        "projected": 21.04872815,
         "slot_id": 2
       },
       {
@@ -428,7 +428,7 @@
         "injury_status": "ACTIVE",
         "name": "Jaylen Waddle",
         "position": "WR",
-        "projected": 13.08391764,
+        "projected": 13.08391793,
         "slot_id": 20
       },
       {
@@ -446,7 +446,7 @@
         "injury_status": "ACTIVE",
         "name": "Parker Washington",
         "position": "WR",
-        "projected": 15.01158625,
+        "projected": 15.01158663,
         "slot_id": 4
       },
       {
@@ -455,7 +455,7 @@
         "injury_status": "ACTIVE",
         "name": "Davante Adams",
         "position": "WR",
-        "projected": 13.82668049,
+        "projected": 16.90351619,
         "slot_id": 20
       },
       {
@@ -468,12 +468,12 @@
         "slot_id": 20
       },
       {
-        "actual": null,
+        "actual": 22.6,
         "espn_id": 4248528,
         "injury_status": "ACTIVE",
         "name": "Christian Watson",
         "position": "WR",
-        "projected": 14.04945379,
+        "projected": 14.04408508,
         "slot_id": 4
       },
       {
@@ -482,7 +482,7 @@
         "injury_status": "ACTIVE",
         "name": "Brock Purdy",
         "position": "QB",
-        "projected": 20.84395895,
+        "projected": 20.84403897,
         "slot_id": 0
       },
       {
@@ -497,7 +497,7 @@
       {
         "actual": null,
         "espn_id": 4695883,
-        "injury_status": "ACTIVE",
+        "injury_status": "QUESTIONABLE",
         "name": "Jalen Coker",
         "position": "WR",
         "projected": 13.83698624,
@@ -509,7 +509,7 @@
         "injury_status": "ACTIVE",
         "name": "Kaelon Black",
         "position": "RB",
-        "projected": 7.3963953,
+        "projected": 7.39628117,
         "slot_id": 20
       },
       {
@@ -527,7 +527,7 @@
         "injury_status": null,
         "name": "Rams D/ST",
         "position": "D/ST",
-        "projected": 8.07590526,
+        "projected": 8.00280015,
         "slot_id": 16
       }
     ],
@@ -535,10 +535,10 @@
       {
         "actual": null,
         "espn_id": 4426515,
-        "injury_status": "QUESTIONABLE",
+        "injury_status": "DOUBTFUL",
         "name": "Puka Nacua",
         "position": "WR",
-        "projected": 19.95151102,
+        "projected": 0.0,
         "slot_id": 4
       },
       {
@@ -547,7 +547,7 @@
         "injury_status": "ACTIVE",
         "name": "De'Von Achane",
         "position": "RB",
-        "projected": 19.4381005,
+        "projected": 19.46093333,
         "slot_id": 2
       },
       {
@@ -556,13 +556,13 @@
         "injury_status": "ACTIVE",
         "name": "Trey McBride",
         "position": "TE",
-        "projected": 16.4678183,
+        "projected": 16.50446626,
         "slot_id": 6
       },
       {
         "actual": null,
         "espn_id": 4595348,
-        "injury_status": "QUESTIONABLE",
+        "injury_status": "ACTIVE",
         "name": "Malik Nabers",
         "position": "WR",
         "projected": 14.44145552,
@@ -574,7 +574,7 @@
         "injury_status": "ACTIVE",
         "name": "Jeremiyah Love",
         "position": "RB",
-        "projected": 12.76757154,
+        "projected": 12.78202403,
         "slot_id": 20
       },
       {
@@ -583,7 +583,7 @@
         "injury_status": "ACTIVE",
         "name": "Cam Skattebo",
         "position": "RB",
-        "projected": 14.02089018,
+        "projected": 14.020982,
         "slot_id": 2
       },
       {
@@ -592,7 +592,7 @@
         "injury_status": "ACTIVE",
         "name": "Tee Higgins",
         "position": "WR",
-        "projected": 12.75225645,
+        "projected": 12.68940348,
         "slot_id": 23
       },
       {
@@ -610,7 +610,7 @@
         "injury_status": "ACTIVE",
         "name": "Luther Burden III",
         "position": "WR",
-        "projected": 11.60000716,
+        "projected": 11.16904,
         "slot_id": 20
       },
       {
@@ -619,7 +619,7 @@
         "injury_status": "QUESTIONABLE",
         "name": "Mike Evans",
         "position": "WR",
-        "projected": 12.49668926,
+        "projected": 12.49681203,
         "slot_id": 20
       },
       {
@@ -634,10 +634,10 @@
       {
         "actual": null,
         "espn_id": 4568490,
-        "injury_status": "QUESTIONABLE",
+        "injury_status": "ACTIVE",
         "name": "RJ Harvey",
         "position": "RB",
-        "projected": 9.50480923,
+        "projected": 9.50480494,
         "slot_id": 20
       },
       {
@@ -655,7 +655,7 @@
         "injury_status": "ACTIVE",
         "name": "Blake Corum",
         "position": "RB",
-        "projected": 8.58080399,
+        "projected": 9.00426643,
         "slot_id": 20
       },
       {
@@ -673,7 +673,7 @@
         "injury_status": null,
         "name": "Vikings D/ST",
         "position": "D/ST",
-        "projected": 9.39204864,
+        "projected": 9.31900935,
         "slot_id": 16
       },
       {
@@ -693,16 +693,16 @@
         "injury_status": "ACTIVE",
         "name": "Jahmyr Gibbs",
         "position": "RB",
-        "projected": 25.39410193,
+        "projected": 25.39410252,
         "slot_id": 2
       },
       {
-        "actual": null,
+        "actual": 28.4,
         "espn_id": 4426502,
         "injury_status": "ACTIVE",
         "name": "Drake London",
         "position": "WR",
-        "projected": 15.39838698,
+        "projected": 15.39802926,
         "slot_id": 4
       },
       {
@@ -717,7 +717,7 @@
       {
         "actual": null,
         "espn_id": 4241478,
-        "injury_status": "ACTIVE",
+        "injury_status": "QUESTIONABLE",
         "name": "DeVonta Smith",
         "position": "WR",
         "projected": 15.637721,
@@ -738,7 +738,7 @@
         "injury_status": "ACTIVE",
         "name": "David Montgomery",
         "position": "RB",
-        "projected": 11.94048107,
+        "projected": 12.04109299,
         "slot_id": 2
       },
       {
@@ -747,7 +747,7 @@
         "injury_status": "ACTIVE",
         "name": "Terry McLaurin",
         "position": "WR",
-        "projected": 11.90008673,
+        "projected": 11.81668877,
         "slot_id": 20
       },
       {
@@ -756,7 +756,7 @@
         "injury_status": "QUESTIONABLE",
         "name": "DJ Moore",
         "position": "WR",
-        "projected": 12.572615,
+        "projected": 12.57261453,
         "slot_id": 20
       },
       {
@@ -765,25 +765,25 @@
         "injury_status": "ACTIVE",
         "name": "Rhamondre Stevenson",
         "position": "RB",
-        "projected": 12.06543649,
+        "projected": 12.06542296,
         "slot_id": 20
       },
       {
         "actual": null,
         "espn_id": 3916148,
-        "injury_status": "QUESTIONABLE",
+        "injury_status": "ACTIVE",
         "name": "Tony Pollard",
         "position": "RB",
-        "projected": 10.56138216,
+        "projected": 10.5613772,
         "slot_id": 20
       },
       {
-        "actual": null,
+        "actual": 1.5,
         "espn_id": 4360248,
         "injury_status": "ACTIVE",
         "name": "Kyle Pitts Sr.",
         "position": "TE",
-        "projected": 9.89214477,
+        "projected": 9.89191712,
         "slot_id": 20
       },
       {
@@ -801,7 +801,7 @@
         "injury_status": "ACTIVE",
         "name": "Jason Myers",
         "position": "K",
-        "projected": 11.34795119,
+        "projected": 11.34795527,
         "slot_id": 17
       },
       {
@@ -810,17 +810,8 @@
         "injury_status": null,
         "name": "Steelers D/ST",
         "position": "D/ST",
-        "projected": 9.27093783,
+        "projected": 9.19794235,
         "slot_id": 16
-      },
-      {
-        "actual": null,
-        "espn_id": 3128429,
-        "injury_status": "ACTIVE",
-        "name": "Courtland Sutton",
-        "position": "WR",
-        "projected": 10.92712339,
-        "slot_id": 20
       },
       {
         "actual": null,
@@ -828,7 +819,16 @@
         "injury_status": "ACTIVE",
         "name": "Aaron Jones Sr.",
         "position": "RB",
-        "projected": 13.68100373,
+        "projected": 13.68105661,
+        "slot_id": 20
+      },
+      {
+        "actual": null,
+        "espn_id": -16007,
+        "injury_status": null,
+        "name": "Broncos D/ST",
+        "position": "D/ST",
+        "projected": 6.52913824,
         "slot_id": 20
       }
     ],
@@ -839,7 +839,7 @@
         "injury_status": "ACTIVE",
         "name": "Ja'Marr Chase",
         "position": "WR",
-        "projected": 19.0438399,
+        "projected": 18.94864949,
         "slot_id": 4
       },
       {
@@ -848,7 +848,7 @@
         "injury_status": "ACTIVE",
         "name": "Justin Jefferson",
         "position": "WR",
-        "projected": 18.26771311,
+        "projected": 18.26812647,
         "slot_id": 4
       },
       {
@@ -857,7 +857,7 @@
         "injury_status": "ACTIVE",
         "name": "Derrick Henry",
         "position": "RB",
-        "projected": 17.81837106,
+        "projected": 17.82022978,
         "slot_id": 2
       },
       {
@@ -866,7 +866,7 @@
         "injury_status": "ACTIVE",
         "name": "Breece Hall",
         "position": "RB",
-        "projected": 16.20168142,
+        "projected": 16.19620482,
         "slot_id": 2
       },
       {
@@ -884,7 +884,7 @@
         "injury_status": "ACTIVE",
         "name": "Emeka Egbuka",
         "position": "WR",
-        "projected": 12.38551092,
+        "projected": 12.38551091,
         "slot_id": 20
       },
       {
@@ -893,7 +893,7 @@
         "injury_status": "ACTIVE",
         "name": "Quinshon Judkins",
         "position": "RB",
-        "projected": 13.75308059,
+        "projected": 13.75317038,
         "slot_id": 20
       },
       {
@@ -902,7 +902,7 @@
         "injury_status": "ACTIVE",
         "name": "Dak Prescott",
         "position": "QB",
-        "projected": 17.14689766,
+        "projected": 17.14689178,
         "slot_id": 0
       },
       {
@@ -911,7 +911,7 @@
         "injury_status": "ACTIVE",
         "name": "Rome Odunze",
         "position": "WR",
-        "projected": 10.3101464,
+        "projected": 9.95080325,
         "slot_id": 20
       },
       {
@@ -920,7 +920,7 @@
         "injury_status": "ACTIVE",
         "name": "George Kittle",
         "position": "TE",
-        "projected": 12.68671501,
+        "projected": 12.68684121,
         "slot_id": 6
       },
       {
@@ -947,7 +947,7 @@
         "injury_status": "ACTIVE",
         "name": "Deebo Samuel Sr.",
         "position": "WR",
-        "projected": 12.35230883,
+        "projected": 12.35240925,
         "slot_id": 23
       },
       {
@@ -956,7 +956,7 @@
         "injury_status": "ACTIVE",
         "name": "Tyler Shough",
         "position": "QB",
-        "projected": 18.86210464,
+        "projected": 18.86213173,
         "slot_id": 20
       },
       {
@@ -970,11 +970,11 @@
       },
       {
         "actual": null,
-        "espn_id": -16029,
+        "espn_id": -16004,
         "injury_status": null,
-        "name": "Panthers D/ST",
+        "name": "Bengals D/ST",
         "position": "D/ST",
-        "projected": 9.51815593,
+        "projected": 8.99499228,
         "slot_id": 16
       }
     ],
@@ -985,16 +985,16 @@
         "injury_status": "ACTIVE",
         "name": "Jaxon Smith-Njigba",
         "position": "WR",
-        "projected": 20.82038345,
+        "projected": 20.83803493,
         "slot_id": 4
       },
       {
         "actual": null,
         "espn_id": 3929630,
-        "injury_status": "QUESTIONABLE",
+        "injury_status": "ACTIVE",
         "name": "Saquon Barkley",
         "position": "RB",
-        "projected": 17.41409924,
+        "projected": 17.41409713,
         "slot_id": 2
       },
       {
@@ -1012,7 +1012,7 @@
         "injury_status": "ACTIVE",
         "name": "Ashton Jeanty",
         "position": "RB",
-        "projected": 18.90504663,
+        "projected": 18.90501198,
         "slot_id": 2
       },
       {
@@ -1021,7 +1021,7 @@
         "injury_status": "ACTIVE",
         "name": "Lamar Jackson",
         "position": "QB",
-        "projected": 21.11372655,
+        "projected": 21.12488084,
         "slot_id": 0
       },
       {
@@ -1030,7 +1030,7 @@
         "injury_status": "ACTIVE",
         "name": "Jameson Williams",
         "position": "WR",
-        "projected": 10.94363602,
+        "projected": 10.94363846,
         "slot_id": 4
       },
       {
@@ -1039,7 +1039,7 @@
         "injury_status": "ACTIVE",
         "name": "Bhayshul Tuten",
         "position": "RB",
-        "projected": 11.02567126,
+        "projected": 11.02575885,
         "slot_id": 20
       },
       {
@@ -1057,7 +1057,7 @@
         "injury_status": "ACTIVE",
         "name": "Bucky Irving",
         "position": "RB",
-        "projected": 15.81202638,
+        "projected": 15.81207481,
         "slot_id": 23
       },
       {
@@ -1066,7 +1066,7 @@
         "injury_status": "ACTIVE",
         "name": "Michael Wilson",
         "position": "WR",
-        "projected": 11.28347767,
+        "projected": 11.30984251,
         "slot_id": 20
       },
       {
@@ -1084,7 +1084,7 @@
         "injury_status": null,
         "name": "Seahawks D/ST",
         "position": "D/ST",
-        "projected": 9.98411396,
+        "projected": 9.91088937,
         "slot_id": 16
       },
       {
@@ -1093,7 +1093,7 @@
         "injury_status": "ACTIVE",
         "name": "Stefon Diggs",
         "position": "WR",
-        "projected": 10.83245925,
+        "projected": 10.81272738,
         "slot_id": 20
       },
       {
@@ -1131,7 +1131,7 @@
         "injury_status": "ACTIVE",
         "name": "Jonathan Taylor",
         "position": "RB",
-        "projected": 20.6617515,
+        "projected": 20.66142312,
         "slot_id": 2
       },
       {
@@ -1140,7 +1140,7 @@
         "injury_status": "ACTIVE",
         "name": "Chase Brown",
         "position": "RB",
-        "projected": 16.64538606,
+        "projected": 16.61293055,
         "slot_id": 2
       },
       {
@@ -1158,7 +1158,7 @@
         "injury_status": "ACTIVE",
         "name": "Tyler Warren",
         "position": "TE",
-        "projected": 12.3073589,
+        "projected": 12.31803814,
         "slot_id": 6
       },
       {
@@ -1167,16 +1167,16 @@
         "injury_status": "ACTIVE",
         "name": "Ladd McConkey",
         "position": "WR",
-        "projected": 13.62190297,
+        "projected": 13.61164359,
         "slot_id": 4
       },
       {
         "actual": null,
         "espn_id": 4685512,
-        "injury_status": "QUESTIONABLE",
+        "injury_status": "ACTIVE",
         "name": "Jadarian Price",
         "position": "RB",
-        "projected": 12.10223494,
+        "projected": 12.10501383,
         "slot_id": 20
       },
       {
@@ -1230,7 +1230,7 @@
         "injury_status": "ACTIVE",
         "name": "DK Metcalf",
         "position": "WR",
-        "projected": 11.35121113,
+        "projected": 11.33920149,
         "slot_id": 20
       },
       {
@@ -1239,8 +1239,8 @@
         "injury_status": null,
         "name": "49ers D/ST",
         "position": "D/ST",
-        "projected": 10.04730579,
-        "slot_id": 16
+        "projected": 9.77186658,
+        "slot_id": 20
       },
       {
         "actual": null,
@@ -1267,7 +1267,7 @@
         "name": "Chiefs D/ST",
         "position": "D/ST",
         "projected": 8.91798057,
-        "slot_id": 20
+        "slot_id": 16
       },
       {
         "actual": null,

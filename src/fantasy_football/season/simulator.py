@@ -38,6 +38,15 @@ class TeamSeason:
     #: around it. See `simulate` for why leaving this at zero makes the
     #: simulator overconfident.
     mean_uncertainty: float = 0.0
+    #: The mean for each remaining week, in schedule order, when it is not flat.
+    #: Byes are why it is not: a roster that loses its WR1 and TE1 in the same
+    #: week is a different team that week, and a single rest-of-season number
+    #: hides exactly the week that decides the matchup. Weeks beyond the end of
+    #: this tuple fall back to `weekly_mean`. None means every week is the same.
+    weekly_means: tuple[float, ...] | None = None
+    #: Strength in the playoffs. NFL byes are over by then, so this is the
+    #: full-strength lineup; defaults to `weekly_mean`.
+    playoff_mean: float | None = None
 
     def draw(self, weeks: int, rng: np.random.Generator) -> np.ndarray:
         return rng.normal(self.weekly_mean, max(self.weekly_sd, 1e-6), size=weeks)
@@ -128,15 +137,32 @@ def simulate(
     n = len(ids)
     weeks = max((len(games) for games in remaining_schedule.values()), default=0)
 
-    means = np.array([t.weekly_mean for t in teams], dtype=np.float64)
     sds = np.array([max(t.weekly_sd, 1e-6) for t in teams], dtype=np.float64)
     uncertainty = np.array([max(t.mean_uncertainty, 0.0) for t in teams], dtype=np.float64)
+    playoff_means = np.array(
+        [t.weekly_mean if t.playoff_mean is None else t.playoff_mean for t in teams],
+        dtype=np.float64,
+    )
+
+    # Each week's mean, which differs from week to week only through byes. A team
+    # without `weekly_means` is flat, and then this is exactly the old single
+    # mean broadcast across the season.
+    week_means = np.empty((n, weeks), dtype=np.float64)
+    for i, team in enumerate(teams):
+        week_means[i, :] = team.weekly_mean
+        if team.weekly_means:
+            given = min(len(team.weekly_means), weeks)
+            week_means[i, :given] = team.weekly_means[:given]
 
     # One draw of "how good is this team really", held fixed across the whole
     # trial — a team that is better than projected is better in week 3 and in
     # the final alike, which is exactly the correlation that makes a season
-    # less predictable than independent weeks would suggest.
-    true_means = means[:, None] + rng.normal(0.0, 1.0, size=(n, trials)) * uncertainty[:, None]
+    # less predictable than independent weeks would suggest. It is an offset,
+    # not a level, so a bye week moves the level and leaves the offset alone.
+    # Drawn in the same order as before, so flat inputs reproduce the results
+    # `check_simulator` validated exactly.
+    strength_offset = rng.normal(0.0, 1.0, size=(n, trials)) * uncertainty[:, None]
+    true_means = playoff_means[:, None] + strength_offset
 
     # opponents[i, w] is the row of team i's week-w opponent, or -1 for a bye.
     opponents = np.full((n, weeks), -1, dtype=np.int64)
@@ -156,7 +182,8 @@ def simulate(
 
     if weeks:
         scores = (
-            true_means[:, None, :]
+            week_means[:, :, None]
+            + strength_offset[:, None, :]
             + rng.normal(0.0, 1.0, size=(n, weeks, trials)) * sds[:, None, None]
         )
         points += scores.sum(axis=1)

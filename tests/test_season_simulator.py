@@ -204,3 +204,62 @@ class TestMeanUncertainty:
     def test_it_is_off_by_default(self):
         team = TeamSeason(team_id=1, name="x", weekly_mean=100.0, weekly_sd=20.0)
         assert team.mean_uncertainty == 0.0
+
+
+class TestWeeksAreNotAllTheSame:
+    """Byes make a team weaker in specific weeks. A single rest-of-season mean
+    hid exactly the week that decides a matchup — week 6 of 2026 cost 3.7 points
+    on a trade that looked +3.93% on the season."""
+
+    def _teams(self, weekly_means=None, uncertainty=3.0):
+        teams = league([120.0, 110.0, 105.0, 100.0])
+        teams[0].mean_uncertainty = uncertainty
+        teams[0].weekly_means = weekly_means
+        return teams
+
+    def test_flat_weekly_means_reproduce_the_scalar_result_exactly(self):
+        """The change must be invisible to everything `check_simulator` validated."""
+        schedule = round_robin([1, 2, 3, 4], 6)
+        scalar = simulate(self._teams(None), schedule, 2, trials=3000, seed=7)
+        flat = simulate(self._teams((120.0,) * 6), schedule, 2, trials=3000, seed=7)
+        for tid in (1, 2, 3, 4):
+            assert np.array_equal(scalar.title_draws[tid], flat.title_draws[tid])
+            assert scalar.mean_wins[tid] == flat.mean_wins[tid]
+
+    def test_a_bye_crunch_costs_wins(self):
+        schedule = round_robin([1, 2, 3, 4], 6)
+        flat = simulate(self._teams(None), schedule, 2, trials=6000, seed=3)
+        crunched = simulate(
+            self._teams((120.0, 120.0, 60.0, 60.0, 120.0, 120.0)), schedule, 2, trials=6000, seed=3
+        )
+        assert crunched.mean_wins[1] < flat.mean_wins[1] - 0.5
+
+    def test_the_bracket_uses_playoff_strength_not_the_bye_week(self):
+        """NFL byes are over by the fantasy playoffs. Two setups with the same
+        regular season — so the same seeding — but different playoff strength
+        must differ in the bracket, and only there."""
+        schedule = round_robin([1, 2, 3, 4], 3)
+
+        byed = self._teams((10.0, 10.0, 10.0))
+        byed[0].weekly_mean = 120.0
+        byed[0].playoff_mean = 120.0
+
+        weak_throughout = self._teams(None)
+        weak_throughout[0].weekly_mean = 10.0
+
+        same_season_strong_bracket = self._teams(None)
+        same_season_strong_bracket[0].weekly_mean = 10.0
+        same_season_strong_bracket[0].playoff_mean = 120.0
+
+        a = simulate(byed, schedule, 4, trials=4000, seed=11)
+        b = simulate(weak_throughout, schedule, 4, trials=4000, seed=11)
+        c = simulate(same_season_strong_bracket, schedule, 4, trials=4000, seed=11)
+
+        assert a.championship[1] > b.championship[1] + 0.2
+        assert np.array_equal(a.title_draws[1], c.title_draws[1])
+
+    def test_a_short_tuple_falls_back_to_the_flat_mean(self):
+        schedule = round_robin([1, 2, 3, 4], 6)
+        short = simulate(self._teams((120.0, 120.0)), schedule, 2, trials=2000, seed=5)
+        scalar = simulate(self._teams(None), schedule, 2, trials=2000, seed=5)
+        assert np.array_equal(short.title_draws[1], scalar.title_draws[1])

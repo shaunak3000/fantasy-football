@@ -67,6 +67,9 @@ class RosterPlayer:
     week_sd: float = 0.0
     injury_status: str | None = None
     unavailable: bool = False
+    #: First week this player can score, when he is out beyond this week — from
+    #: `data/injury_returns.json` or the IR four-game floor. None means available.
+    return_week: int | None = None
 
     @property
     def started(self) -> bool:
@@ -167,10 +170,17 @@ def build_state(
     free_agent_pool: int = 60,
     byes: dict[int, int] | None = None,
     weekly_projections: dict[int, WeeklyProjection] | None = None,
+    return_weeks: dict[int, int] | None = None,
 ) -> LeagueState:
-    """Assemble rosters, remaining schedule, and standings from the live league."""
+    """Assemble rosters, remaining schedule, and standings from the live league.
+
+    `return_weeks` maps ESPN id to the first week a long-term injured player can
+    score (see `data/injuries.py`). It is computed by the caller so that this
+    function stays free of file and network access.
+    """
     by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
     byes = byes or {}
+    return_weeks = return_weeks or {}
     weekly_projections = weekly_projections or {}
 
     def to_roster_player(espn_id, name, position, slot_id=UNKNOWN_SLOT_ID) -> RosterPlayer | None:
@@ -217,6 +227,7 @@ def build_state(
             week_sd=week_sd,
             injury_status=injury_status,
             unavailable=unavailable,
+            return_week=return_weeks.get(espn_id),
         )
 
     state = LeagueState(settings=settings, current_week=current_week)
