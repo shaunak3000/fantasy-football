@@ -21,7 +21,8 @@ from espn_api.football import League
 
 from .config import load_credentials
 from .data.espn import fetch_raw_settings, fetch_weekly_projections, parse_settings
-from .data.injuries import league_return_weeks, source_of
+from .data.espn_injuries import load_report
+from .data.injuries import league_return_weeks
 from .data.snapshots import capture_and_save, load_season, weeks_awaiting_results
 from .draft.cache import load_bundle
 from .draft.live import my_team_id
@@ -55,7 +56,7 @@ SIM_TRIALS = DEFAULT_TRIALS
 PROJECTION_MEAN_UNCERTAINTY = 3.7
 
 
-def _lineup_section(state, my_id, settings, week) -> list:
+def _lineup_section(state, my_id, settings, week, returning=None) -> list:
     """Print the start/sit advice and return the bench, for the waiver screen."""
     roster = state.rosters[my_id]
     week_roster = this_week(roster)
@@ -107,8 +108,12 @@ def _lineup_section(state, my_id, settings, week) -> list:
         key=lambda p: p.return_week,
     )
     if later:
-        season = getattr(settings, "season", SEASON)
-        notes = [f"{p.player} wk{p.return_week} ({source_of(p.player, season)})" for p in later]
+        returning = returning or {}
+        notes = []
+        for p in later:
+            info = returning.get(p.espn_id)
+            source = info.source if info else "?"
+            notes.append(f"{p.player} wk{p.return_week} ({source})")
         print("\n  BACK LATER: " + ", ".join(notes))
 
     # A bye collision two weeks out is fixable now and unfixable then, so the
@@ -186,7 +191,19 @@ def main(argv: list[str]) -> int:
     published = fetch_weekly_projections(league, week)
     # ESPN publishes no return dates. These come from data/injury_returns.json
     # where the news is known, and the IR four-game floor where it is not.
-    returning = league_return_weeks(published, week, season, load_season(season))
+    # ESPN's injury report carries an estimated return date for every injured
+    # player; the fantasy API carries none. If the page cannot be read, fall back
+    # to the hand-kept overrides and the IR floor — and say so, because every
+    # trade touching an injured player is priced on these weeks.
+    try:
+        report = load_report(season)
+        report_note, reported = report.describe(), report.entries
+    except Exception as exc:  # noqa: BLE001 - a scrape failure must not take the report down
+        report_note = (
+            f"ESPN injury report UNAVAILABLE ({type(exc).__name__}) — using overrides + IR floor"
+        )
+        reported = None
+    returning = league_return_weeks(published, week, season, load_season(season), reported=reported)
     state = build_state(
         league,
         settings,
@@ -195,7 +212,7 @@ def main(argv: list[str]) -> int:
         current_week=week,
         byes=bye_weeks_by_espn_id() if season == SEASON else {},
         weekly_projections=published,
-        return_weeks=returning,
+        return_weeks={pid: info.week for pid, info in returning.items()},
     )
 
     my_id = my_team_id(league, creds.swid)
@@ -223,7 +240,8 @@ def main(argv: list[str]) -> int:
     for finished_week in weeks_awaiting_results(season, live_week):
         captures.append(capture_and_save(league, finished_week, season))
 
-    print(f"_Snapshot: {'; '.join(captures)}._\n")
+    print(f"_Snapshot: {'; '.join(captures)}._")
+    print(f"_Injuries: {report_note}._\n")
 
     # One baseline, computed once, shared by every section below. The standings
     # table, the waiver deltas and the trade deltas are all differences against
@@ -251,7 +269,7 @@ def main(argv: list[str]) -> int:
     )
 
     print("\n## Start these\n")
-    bench = _lineup_section(state, my_id, settings, week)
+    bench = _lineup_section(state, my_id, settings, week, returning)
 
     print("\n## Waiver targets\n")
     print("_Advisory — priced in title probability, not yet validated against history._")

@@ -8,29 +8,35 @@ starter from week 4. That made every trade touching the receiver room wrong, and
 labelled DK Metcalf "depth — never starts" when he would in fact have started
 every week until Brown returned.
 
-Two sources, in order:
+Three sources, in order:
 
-1. `data/injury_returns.json`, maintained by hand from the news. Tracked in git.
-   A `return_date` is resolved to the player's own team's first game on or after
-   it, so "back in November" lands on the right week even when his team plays on
-   a Thursday.
-2. Otherwise, for injured reserve only, the NFL's four-game minimum counted from
-   the week the player was first seen on IR in the weekly snapshots. That is a
-   floor, not a forecast — a real placement can be earlier than our first
-   capture, and many injuries run well past four games — but it is far closer
-   than "back next week", and it applies to every roster, so the other side of a
-   trade is valued the same way.
+1. `data/injury_returns.json`, maintained by hand. It exists to *correct* the
+   next source when the news is ahead of it, and it always wins — so an entry
+   left in after the news moves on silently overrides a fresher date. Delete
+   entries once they stop being corrections.
+2. ESPN's public injury report (`espn_injuries.py`): an estimated return date for
+   every injured player, keyed by the same id as the fantasy API. Used for IR,
+   OUT, DOUBTFUL and suspensions; QUESTIONABLE players are assumed to play.
+3. Otherwise, for injured reserve only, the NFL's four-game minimum counted from
+   the week the player was first seen on IR in the weekly snapshots — a floor,
+   not a forecast. It ran two weeks short for Jonathon Brooks (floor week 7,
+   ESPN 8 November), which is why it is the last resort.
 
-OUT and DOUBTFUL keep the old behaviour: out this week only.
+Every date resolves to the player's own team's first game on or after it, so
+"back in November" is week 8 for New England, and a date past the team's last
+regular-season game means out for the season — ESPN writes "Feb" for those.
+Anything with no source keeps the old behaviour: out this week only.
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 from ..config import REPO_ROOT
+from .espn_injuries import DATED_STATUSES
 
 RETURNS_FILE = REPO_ROOT / "data" / "injury_returns.json"
 
@@ -89,7 +95,9 @@ def resolve_return_week(
     for week, when in candidates:
         if when >= target:
             return week
-    return None
+    # After the team's last regular-season game: out for the season. A week past
+    # the schedule keeps him out of every remaining week and out of the bracket.
+    return candidates[-1][0] + 1 if candidates else None
 
 
 def first_seen_on_ir(snapshots) -> dict[int, int]:
@@ -103,7 +111,22 @@ def first_seen_on_ir(snapshots) -> dict[int, int]:
     return seen
 
 
-def return_week(
+@dataclass(frozen=True)
+class ReturnInfo:
+    """When a player is back, and where that came from — printed in the report."""
+
+    week: int
+    source: str
+
+
+def _describe(when: date | None, week: int, games: dict | None, team: str | None) -> str:
+    last = max((w for w, _ in (games or {}).get(team or "", [])), default=None)
+    if last is not None and week > last:
+        return "out for season"
+    return f"{when:%b} {when.day}" if when else f"wk{week}"
+
+
+def return_info(
     name: str,
     espn_id: int | None,
     injury_status: str | None,
@@ -111,46 +134,65 @@ def return_week(
     overrides: dict[str, dict],
     first_seen: dict[int, int],
     games: dict[str, list[tuple[int, date]]] | None = None,
-) -> int | None:
-    """The first week this player can score, or None if he is available now.
+    reported: dict | None = None,
+) -> ReturnInfo | None:
+    """The first week this player can score and its source, or None if available.
 
-    An override always wins, even for a player ESPN now lists as healthy — the
-    news runs ahead of the status. IR without an override falls back to the
-    four-game minimum. Anything else is out at most for the current week, which
-    is already handled where availability is computed.
+    Each source that can answer, answers — a date resolving to this week or
+    earlier means available now, and the weaker sources are not consulted.
     """
     info = overrides.get(normalize(name))
     if info is not None:
         week = resolve_return_week(info, games)
         if week is not None:
-            return week if week > current_week else None
+            if week <= current_week:
+                return None
+            return ReturnInfo(week, "injury_returns.json")
+
+    entry = (reported or {}).get(espn_id) if espn_id is not None else None
+    if entry is not None and entry.status in DATED_STATUSES and entry.return_date:
+        week = resolve_return_week(
+            {"team": entry.team, "return_date": entry.return_date.isoformat()}, games
+        )
+        if week is not None:
+            if week <= current_week:
+                return None
+            label = _describe(entry.return_date, week, games, entry.team)
+            return ReturnInfo(week, f"ESPN est. {label}")
+
     if (injury_status or "").upper() in IR_STATUSES:
         placed = first_seen.get(espn_id, current_week) if espn_id is not None else current_week
-        return max(current_week + 1, placed + IR_MINIMUM_GAMES)
+        return ReturnInfo(max(current_week + 1, placed + IR_MINIMUM_GAMES), "IR 4-game floor")
     return None
 
 
-def league_return_weeks(
-    published: dict, current_week: int, season: int, snapshots
-) -> dict[int, int]:
-    """ESPN id -> first week back, for every player ESPN published this week.
+def return_week(*args, **kwargs) -> int | None:
+    """`return_info` without the source."""
+    info = return_info(*args, **kwargs)
+    return info.week if info else None
 
-    `published` is `fetch_weekly_projections` output, which covers every rostered
-    player and the top of the wire, so both sides of any trade are covered. The
-    schedule is only fetched when an override needs a date resolved, and a failure
-    there degrades to the IR floor rather than taking the report down.
+
+def league_return_weeks(
+    published: dict, current_week: int, season: int, snapshots, reported: dict | None = None
+) -> dict[int, ReturnInfo]:
+    """ESPN id -> return info, for every player ESPN published this week.
+
+    `published` is `fetch_weekly_projections` output, covering every rostered
+    player and the top of the wire, so both sides of any trade are valued the
+    same way. The schedule is fetched only when a date needs resolving; if that
+    fails, dates cannot be placed and IR falls back to the four-game floor.
     """
     overrides = load_overrides(season)
     first_seen = first_seen_on_ir(snapshots)
     games = None
-    if any("return_date" in info for info in overrides.values()):
+    if reported or any("return_date" in info for info in overrides.values()):
         try:
             games = team_game_weeks(season)
         except Exception:  # noqa: BLE001 - never let a schedule fetch break the report
             games = None
-    out: dict[int, int] = {}
+    out: dict[int, ReturnInfo] = {}
     for espn_id, projection in published.items():
-        week = return_week(
+        info = return_info(
             projection.name,
             espn_id,
             projection.injury_status,
@@ -158,12 +200,8 @@ def league_return_weeks(
             overrides,
             first_seen,
             games,
+            reported,
         )
-        if week is not None:
-            out[espn_id] = week
+        if info is not None:
+            out[espn_id] = info
     return out
-
-
-def source_of(name: str, season: int) -> str:
-    """Where a return week came from, for the report."""
-    return "injury_returns.json" if normalize(name) in load_overrides(season) else "IR 4-game floor"

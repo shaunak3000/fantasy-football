@@ -93,8 +93,9 @@ class TestTheFile:
     def test_a_missing_file_means_no_overrides(self, tmp_path):
         assert load_overrides(2026, tmp_path / "absent.json") == {}
 
-    def test_the_real_file_records_aj_brown(self):
-        assert normalize("A.J. Brown") in load_overrides(2026)
+    def test_the_real_file_parses(self):
+        """Empty by default: ESPN's report is the source, the file only corrects it."""
+        assert isinstance(load_overrides(2026), dict)
 
 
 @dataclass

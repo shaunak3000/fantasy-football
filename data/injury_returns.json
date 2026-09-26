@@ -1,10 +1,4 @@
 {
-  "_readme": "Expected return dates for injured players, by season. ESPN's API publishes only a status (OUT, INJURY_RESERVE), never a return date, so this file is the source for what the news says. Give either return_date (YYYY-MM-DD, resolved to the player's first game on or after it) or return_week. Entries here always beat the default, which is the NFL's four-game injured-reserve minimum counted from the week the player was first seen on IR in data/snapshots/. Delete an entry once the player is back.",
-  "2026": {
-    "A.J. Brown": {
-      "team": "NE",
-      "return_date": "2026-11-01",
-      "note": "Out until November per Shaunak, 2026-09-25. First NE game in November is week 8 (@ MIA)."
-    }
-  }
+  "_readme": "Corrections to ESPN's injury report, by season. Return dates normally come from https://www.espn.com/nfl/injuries (see src/fantasy_football/data/espn_injuries.py); add an entry here only when the news is ahead of ESPN. Entries ALWAYS beat ESPN, so a stale one silently overrides a fresher date: delete it once ESPN catches up or the player is back. Give return_date (YYYY-MM-DD, resolved to the player's own team's first game on or after it) or return_week, plus team (e.g. NE) when using a date.",
+  "2026": {}
 }
