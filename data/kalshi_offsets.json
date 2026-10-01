@@ -1,8 +1,19 @@
 {
   "_note": "check_kalshi 2026, weeks 1-3, n=659",
+  "season": 2026,
+  "through_week": 3,
   "offsets": {
     "passing": -15.11,
     "rushing": -6.01,
     "receiving": -5.89
+  },
+  "summary": {
+    "n": 560,
+    "espn_mae": 5.612,
+    "blend_mae": 5.539,
+    "diff": -0.072,
+    "lo": -0.122,
+    "hi": -0.022,
+    "verdict": "the blend is better"
   }
 }

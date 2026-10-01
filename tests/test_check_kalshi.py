@@ -93,3 +93,32 @@ class TestTheBlendNeverSeesItsOwnWeek:
         espn, mine, _ = next(b for b in blended if b[1] != b[0])
         # week 1: offsets from week 2 are 0, so shift = 0.1*10 + 0.1*10 = 2.0
         assert mine - espn == pytest.approx(2.0)
+
+
+class TestTheRefresh:
+    def rows(self):
+        return [
+            row(1, "a", "receiving", 70, 62, 60, proj_pts=10.0, act_pts=9.0),
+            row(1, "b", "rushing", 60, 50, 55, proj_pts=12.0, act_pts=11.0),
+            row(2, "c", "receiving", 50, 46, 48, proj_pts=8.0, act_pts=8.0),
+            row(2, "d", "rushing", 40, 36, 30, proj_pts=9.0, act_pts=7.0),
+        ]
+
+    def test_it_writes_offsets_coverage_and_summary(self, tmp_path):
+        from fantasy_football.check_kalshi import refresh_offsets
+
+        path = tmp_path / "o.json"
+        payload = refresh_offsets(2026, 2, rows=self.rows(), path=path)
+        assert payload["through_week"] == 2 and payload["season"] == 2026
+        assert payload["offsets"]["receiving"] == pytest.approx(-6.0)  # (-8 + -4) / 2
+        assert payload["offsets"]["rushing"] == pytest.approx(-7.0)  # (-10 + -4) / 2
+        assert payload["summary"]["n"] == 4 and "verdict" in payload["summary"]
+
+    def test_an_empty_measurement_never_overwrites_a_good_file(self, tmp_path):
+        from fantasy_football.check_kalshi import refresh_offsets
+
+        path = tmp_path / "o.json"
+        path.write_text('{"keep": true}')
+        with pytest.raises(RuntimeError):
+            refresh_offsets(2026, 3, rows=[], path=path)
+        assert path.read_text() == '{"keep": true}'

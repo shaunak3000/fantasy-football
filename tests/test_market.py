@@ -139,3 +139,60 @@ class TestPlumbing:
         games = {"NE": [(4, 100), (5, 900)], "DET": [(4, 300)]}
         assert week_window(games, 4) == (100, 300 + 86400)
         assert week_window(games, 9) is None
+
+
+class TestKeepingTheCorrectionCurrent:
+    """The offsets must be re-measured every week. The report does it itself, so
+    it has to know exactly when a week is missing — and never refresh into the
+    week still being played."""
+
+    def meta(self, through, season=2026):
+        return {"season": season, "through_week": through}
+
+    def test_a_current_file_is_left_alone(self):
+        from fantasy_football.projections.market import week_to_refresh
+
+        assert week_to_refresh(self.meta(3), 2026, live_week=4) is None
+
+    def test_a_finished_week_not_yet_measured_is_due(self):
+        from fantasy_football.projections.market import week_to_refresh
+
+        assert week_to_refresh(self.meta(3), 2026, live_week=5) == 4
+
+    def test_the_week_being_played_is_never_measured(self):
+        """Week 4 is live: its markets have not settled."""
+        from fantasy_football.projections.market import week_to_refresh
+
+        assert week_to_refresh(self.meta(3), 2026, live_week=4) is None
+        assert week_to_refresh({}, 2026, live_week=1) is None
+
+    def test_a_file_without_coverage_or_from_another_season_counts_as_empty(self):
+        from fantasy_football.projections.market import week_to_refresh
+
+        assert week_to_refresh({"offsets": {"rushing": -6.0}}, 2026, live_week=4) == 3
+        assert week_to_refresh(self.meta(14, season=2025), 2026, live_week=4) == 3
+
+    def test_the_file_records_what_it_covers(self, tmp_path):
+        from fantasy_football.projections.market import load_offsets_file
+
+        path = tmp_path / "o.json"
+        save_offsets(
+            {"rushing": -6.0},
+            note="n",
+            path=path,
+            season=2026,
+            through_week=3,
+            summary={"n": 10, "diff": -0.07, "lo": -0.12, "hi": -0.02},
+        )
+        meta = load_offsets_file(path)
+        assert meta["season"] == 2026 and meta["through_week"] == 3
+        assert load_offsets(path) == {"rushing": -6.0}
+
+    def test_every_report_says_what_the_correction_rests_on(self):
+        from fantasy_football.projections.market import describe_offsets
+
+        line = describe_offsets(
+            {"through_week": 3, "summary": {"n": 560, "diff": -0.07, "lo": -0.12, "hi": -0.02}}
+        )
+        assert "through wk 3" in line and "n=560" in line and "-0.07" in line
+        assert describe_offsets({}) == "offsets coverage unknown"

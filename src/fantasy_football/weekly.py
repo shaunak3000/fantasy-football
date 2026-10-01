@@ -19,6 +19,7 @@ import sys
 
 from espn_api.football import League
 
+from .check_kalshi import refresh_offsets
 from .config import load_credentials
 from .data.espn import fetch_raw_settings, fetch_weekly_projections, parse_settings
 from .data.espn_injuries import load_report
@@ -30,10 +31,12 @@ from .draft.live import my_team_id
 from .lineup.optimizer import best_lineup_against, optimize
 from .projections.history import training_table
 from .projections.market import (
+    describe_offsets,
     kickoffs,
-    load_offsets,
+    load_offsets_file,
     market_adjustments,
     open_medians,
+    week_to_refresh,
     week_window,
 )
 from .projections.scoring import ScoringEngine
@@ -229,9 +232,27 @@ def main(argv: list[str]) -> int:
     # The market's second opinion: ESPN's points with Kalshi's yardage swapped
     # in, the blend `check_kalshi` measured as slightly better (mostly at RB).
     # Any failure — network, no offsets yet, no open markets — leaves ESPN alone.
+    # Keep the blend's correction current. Once the league has finished a week
+    # the offsets file has not measured, measure it now: past prices are cached,
+    # so only the newest week costs requests. A failure keeps the last good file.
+    meta = load_offsets_file()
+    refresh_note = ""
+    live = max(int(getattr(league, "nfl_week", week) or week), 1)
+    due = week_to_refresh(meta, season, live) if season == SEASON else None
+    if due is not None:
+        try:
+            meta = refresh_offsets(season, due)
+            refresh_note = (
+                f" Offsets refreshed through week {due} — commit data/kalshi_offsets.json."
+            )
+        except Exception as exc:  # noqa: BLE001 - a stale correction beats no report
+            refresh_note = (
+                f" Offsets refresh FAILED ({type(exc).__name__}); using the last measurement."
+            )
+
     adjustments: dict[int, float] = {}
     try:
-        offsets = load_offsets()
+        offsets = meta.get("offsets", {})
         window = week_window(kickoffs(season), week)
         if not offsets:
             market_note = "Kalshi blend OFF — no offsets yet; run check_kalshi"
@@ -242,7 +263,7 @@ def main(argv: list[str]) -> int:
             adjustments = market_adjustments(published, medians, offsets)
             market_note = (
                 f"Kalshi blend on — {len(medians)} yardage ladders priced, "
-                f"{len(adjustments)} projections adjusted"
+                f"{len(adjustments)} projections adjusted; {describe_offsets(meta)}"
             )
     except Exception as exc:  # noqa: BLE001 - the market is a second opinion, never a dependency
         adjustments = {}
@@ -286,7 +307,7 @@ def main(argv: list[str]) -> int:
 
     print(f"_Snapshot: {'; '.join(captures)}._")
     print(f"_Injuries: {report_note}._")
-    print(f"_Market: {market_note}._\n")
+    print(f"_Market: {market_note}.{refresh_note}_\n")
 
     # One baseline, computed once, shared by every section below. The standings
     # table, the waiver deltas and the trade deltas are all differences against

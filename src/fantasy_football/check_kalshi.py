@@ -36,7 +36,13 @@ from .config import load_credentials
 from .data.espn import PLAYER_POSITION_BY_ID, YARD_IDS
 from .data.injuries import normalize
 from .data.kalshi import LADDER_SERIES, KalshiClient, ladder_median, parse_rung
-from .projections.market import POINTS_PER_YARD, TIGHT_SPREAD, kickoffs, save_offsets
+from .projections.market import (
+    OFFSETS_FILE,
+    POINTS_PER_YARD,
+    TIGHT_SPREAD,
+    kickoffs,
+    save_offsets,
+)
 
 
 def _stat(stats: dict, ids: tuple[int, ...]) -> float | None:
@@ -256,29 +262,78 @@ def report(rows: list[dict], weeks: list[int]) -> None:
         e, n = _pairwise(subset, "espn")
         k, _ = _pairwise(subset, "kalshi")
         print(f"     {label:<18} ESPN {e:.1%}   Kalshi {k:.1%}   ({n:,} pairs)")
-    blend = _blend(rows, weeks)
-    if blend:
-        d = [abs(b - a) - abs(e - a) for e, b, a in blend]
-        mean = sum(d) / len(d)
-        rng = random.Random(0)
-        boots = sorted(sum(rng.choice(d) for _ in d) / len(d) for _ in range(2000))
-        lo, hi = boots[50], boots[1949]
-        e_mae = sum(abs(e - a) for e, _, a in blend) / len(blend)
-        b_mae = sum(abs(b - a) for _, b, a in blend) / len(blend)
+    summary = blend_summary(rows, weeks)
+    if summary:
         print("\n  3. FANTASY POINTS — ESPN's points with the market's yardage swapped in")
-        print(f"     n={len(blend)} player-weeks   MAE  ESPN {e_mae:.2f}   blend {b_mae:.2f}")
         print(
-            f"     blend minus ESPN: {mean:+.2f} pts per player-week,"
-            f" 95% interval [{lo:+.2f}, {hi:+.2f}]"
+            f"     n={summary['n']} player-weeks   MAE  ESPN {summary['espn_mae']:.2f}"
+            f"   blend {summary['blend_mae']:.2f}"
         )
-        verdict = (
+        print(
+            f"     blend minus ESPN: {summary['diff']:+.2f} pts per player-week,"
+            f" 95% interval [{summary['lo']:+.2f}, {summary['hi']:+.2f}]"
+        )
+        print(f"     -> {summary['verdict']}")
+
+
+def blend_summary(rows: list[dict], weeks: list[int]) -> dict | None:
+    """The fantasy-point test as numbers: error of each, their gap, and its interval."""
+    blend = _blend([r for r in rows if r["espn"] is not None], weeks)
+    if not blend:
+        return None
+    d = [abs(b - a) - abs(e - a) for e, b, a in blend]
+    rng = random.Random(0)
+    boots = sorted(sum(rng.choice(d) for _ in d) / len(d) for _ in range(2000))
+    lo, hi = boots[50], boots[1949]
+    return {
+        "n": len(blend),
+        "espn_mae": round(sum(abs(e - a) for e, _, a in blend) / len(blend), 3),
+        "blend_mae": round(sum(abs(b - a) for _, b, a in blend) / len(blend), 3),
+        "diff": round(sum(d) / len(d), 3),
+        "lo": round(lo, 3),
+        "hi": round(hi, 3),
+        "verdict": (
             "the blend is better"
             if hi < 0
             else "ESPN is better"
             if lo > 0
             else "no measurable difference yet"
-        )
-        print(f"     -> {verdict}")
+        ),
+    }
+
+
+def offsets_from(rows: list[dict]) -> dict[str, float]:
+    """The median-below-mean gap per stat, from every measured week."""
+    usable = [r for r in rows if r["espn"] is not None]
+    return {
+        stat: sum(r["kalshi"] - r["espn"] for r in usable if r["stat"] == stat)
+        / sum(1 for r in usable if r["stat"] == stat)
+        for stat in POINTS_PER_YARD
+        if any(r["stat"] == stat for r in usable)
+    }
+
+
+def refresh_offsets(
+    season: int, through_week: int, rows: list[dict] | None = None, path=None
+) -> dict:
+    """Measure weeks 1..through_week and rewrite the offsets file.
+
+    Past prices are cached, so a weekly refresh fetches only the newest week.
+    Raises if nothing could be matched, so the caller keeps the old file rather
+    than overwriting a good correction with an empty one.
+    """
+    weeks = list(range(1, through_week + 1))
+    rows = rows if rows is not None else collect(season, weeks)
+    if not rows:
+        raise RuntimeError("no player-weeks matched to priced Kalshi ladders")
+    return save_offsets(
+        offsets_from(rows),
+        note=f"check_kalshi {season}, weeks 1-{through_week}, n={len(rows)}",
+        season=season,
+        through_week=through_week,
+        summary=blend_summary(rows, weeks),
+        path=path or OFFSETS_FILE,
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -290,21 +345,10 @@ def main(argv: list[str]) -> int:
         print("No player-weeks could be matched to priced Kalshi ladders.")
         return 1
     report(rows, weeks)
-    # The median-below-mean gap per stat, from every measured week. `weekly.py`
-    # takes it off before swapping the market's yardage into a projection.
-    usable = [r for r in rows if r["espn"] is not None]
-    offsets = {
-        stat: sum(r["kalshi"] - r["espn"] for r in usable if r["stat"] == stat)
-        / max(1, sum(1 for r in usable if r["stat"] == stat))
-        for stat in POINTS_PER_YARD
-        if any(r["stat"] == stat for r in usable)
-    }
-    save_offsets(
-        offsets, note=f"check_kalshi {season}, weeks {weeks[0]}-{weeks[-1]}, n={len(usable)}"
-    )
+    payload = refresh_offsets(season, last, rows=rows)
     print(
         "\n  offsets saved (market median minus ESPN mean, yards): "
-        + ", ".join(f"{k} {v:+.1f}" for k, v in offsets.items())
+        + ", ".join(f"{k} {v:+.1f}" for k, v in payload["offsets"].items())
     )
     return 0
 

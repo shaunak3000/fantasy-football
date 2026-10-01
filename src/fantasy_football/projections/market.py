@@ -53,15 +53,63 @@ def week_window(games: dict[str, list[tuple[int, int]]], week: int) -> tuple[int
     return min(times), max(times) + 86400
 
 
-def load_offsets(path=OFFSETS_FILE) -> dict[str, float]:
+def load_offsets_file(path=OFFSETS_FILE) -> dict:
+    """The whole offsets file: the offsets, the weeks they cover, and the
+    measurement summary from the last refresh."""
     if not path.exists():
         return {}
-    return json.loads(path.read_text(encoding="utf-8")).get("offsets", {})
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
-def save_offsets(offsets: dict[str, float], note: str, path=OFFSETS_FILE) -> None:
-    payload = {"_note": note, "offsets": {k: round(v, 2) for k, v in offsets.items()}}
+def load_offsets(path=OFFSETS_FILE) -> dict[str, float]:
+    return load_offsets_file(path).get("offsets", {})
+
+
+def save_offsets(
+    offsets: dict[str, float],
+    note: str,
+    path=OFFSETS_FILE,
+    season: int | None = None,
+    through_week: int | None = None,
+    summary: dict | None = None,
+) -> dict:
+    payload = {
+        "_note": note,
+        "season": season,
+        #: The last finished week measured. `weekly.py` refreshes when the league
+        #: has finished a week past this one; a free-text note could not be checked.
+        "through_week": through_week,
+        "offsets": {k: round(v, 2) for k, v in offsets.items()},
+        "summary": summary or {},
+    }
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return payload
+
+
+def week_to_refresh(meta: dict, season: int, live_week: int) -> int | None:
+    """The finished week to measure through, or None if the file is current.
+
+    A week is finished once the league has moved past it, so the last finished
+    week is the one before the live scoring period. A file for another season,
+    or one written before coverage was recorded, counts as covering nothing.
+    """
+    finished = live_week - 1
+    if finished < 1:
+        return None
+    covered = meta.get("through_week") if meta.get("season") == season else None
+    return finished if (covered or 0) < finished else None
+
+
+def describe_offsets(meta: dict) -> str:
+    """One line on what the blend's correction rests on, for every report."""
+    through, summary = meta.get("through_week"), meta.get("summary") or {}
+    if not through or not summary:
+        return "offsets coverage unknown"
+    return (
+        f"measured through wk {through} (n={summary['n']}): blend "
+        f"{summary['diff']:+.2f} pts/player-week vs ESPN "
+        f"[{summary['lo']:+.2f}, {summary['hi']:+.2f}]"
+    )
 
 
 def open_medians(client: KalshiClient, window: tuple[int, int]) -> dict[tuple[str, str], float]:
