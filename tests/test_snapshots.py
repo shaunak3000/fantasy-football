@@ -197,3 +197,37 @@ class TestCaptureNeverBreaksTheReport:
                 raise RuntimeError("ESPN is down")
 
         assert "snapshot failed" in snapshots.capture_and_save(Broken(), 1, 2026)
+
+
+class TestPointsPerGame:
+    """The box score the other manager reads. A week with no stat line — inactive,
+    injured, bye — is not a game."""
+
+    def test_it_averages_only_games_played(self):
+        snaps = [
+            snapshot(1, 1, [player(7, 2, actual=10.0)]),
+            snapshot(2, 2, [player(7, 2, actual=None)]),  # inactive
+            snapshot(3, 3, [player(7, 2, actual=20.0)]),
+        ]
+        assert snapshots.points_per_game(snaps) == {7: 15.0}
+
+    def test_a_player_on_two_rosters_in_one_week_counts_once(self):
+        s = snapshot(1, 1, [player(7, 2, actual=12.0)])
+        s.teams[2] = [player(7, 20, actual=12.0)]
+        assert snapshots.points_per_game([s]) == {7: 12.0}
+
+    def test_a_zero_is_a_game(self):
+        """Played and scored nothing is not the same as did not play."""
+        snaps = [
+            snapshot(1, 1, [player(7, 2, actual=0.0)]),
+            snapshot(2, 2, [player(7, 2, actual=10.0)]),
+        ]
+        assert snapshots.points_per_game(snaps) == {7: 5.0}
+
+    def test_too_few_games_are_left_out(self):
+        """Nico Collins' 21.2 a game was one game."""
+        snaps = [
+            snapshot(1, 1, [player(7, 2, actual=21.2), player(8, 2, actual=10.0)]),
+            snapshot(2, 2, [player(7, 2, actual=None), player(8, 2, actual=14.0)]),
+        ]
+        assert snapshots.points_per_game(snaps, min_games=2) == {8: 12.0}

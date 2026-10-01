@@ -332,3 +332,26 @@ def capture_and_save(league: League, week: int, season: int | None = None) -> st
     except Exception as exc:  # noqa: BLE001 - a failed snapshot must not break the report
         return f"snapshot failed: {type(exc).__name__}: {exc}"
     return reason
+
+
+def points_per_game(snapshots, min_games: int = 1) -> dict[int, float]:
+    """ESPN id -> points per game actually played this season, from the snapshots.
+
+    This is the number the other manager sees. Our valuation runs on projections,
+    which is right for our own decisions and wrong for predicting theirs: in 2026
+    Drake Maye was worth about 18 a week to the model and 7.2 on the box score,
+    so every trade built around him was one nobody would accept. A week with no
+    stat line — inactive, injured, on bye — is not a game and does not count.
+
+    `min_games` drops players whose average rests on too little: Nico Collins at
+    21.2 a game was one game, and a manager knows his receiver has been hurt.
+    """
+    games: dict[int, list[float]] = {}
+    for snapshot in snapshots:
+        seen: set[int] = set()  # a player on two rosters in one week counts once
+        for players in snapshot.teams.values():
+            for player in players:
+                if player.actual is not None and player.espn_id not in seen:
+                    seen.add(player.espn_id)
+                    games.setdefault(player.espn_id, []).append(player.actual)
+    return {pid: sum(v) / len(v) for pid, v in games.items() if len(v) >= max(min_games, 1)}

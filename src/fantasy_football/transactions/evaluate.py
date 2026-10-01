@@ -209,6 +209,42 @@ class MoveEvaluation:
     #: refuse is worthless, and "your guy only covers one of my byes" is the most
     #: common reason to refuse — so it is measured the same way on both sides.
     outgoing: tuple[PlayerUsage, ...] = ()
+    #: The trade as the other manager reads it: season points per game, QB/RB/
+    #: WR/TE only, of what they would receive and what they would give up. None
+    #: when no season stats were supplied.
+    box_they_get: float | None = None
+    box_they_give: float | None = None
+    #: Their starting lineup, in points a week, valued as they see it — before and
+    #: after the trade. This, not the traded players' sum, decides their answer.
+    box_lineup_before: float | None = None
+    box_lineup_after: float | None = None
+
+    @property
+    def box_lineup_change(self) -> float | None:
+        if self.box_lineup_before is None or self.box_lineup_after is None:
+            return None
+        return self.box_lineup_after - self.box_lineup_before
+
+    @property
+    def box_score_accepts(self) -> bool | None:
+        """Whether their lineup looks clearly better to them on this season's numbers."""
+        change = self.box_lineup_change
+        if change is None:
+            return None
+        return change >= BOX_SCORE_MARGIN
+
+    @property
+    def model_accepts(self) -> bool:
+        return self.counterparty_delta > self.counterparty_stderr
+
+    @property
+    def accepted_on(self) -> str:
+        lenses = [
+            name
+            for name, ok in (("model", self.model_accepts), ("box score", self.box_score_accepts))
+            if ok
+        ]
+        return " + ".join(lenses) or "neither"
 
     @property
     def season_points_change(self) -> float:
@@ -257,7 +293,18 @@ class MoveEvaluation:
 
     @property
     def mutually_acceptable(self) -> bool:
-        return self.significant and self.counterparty_delta > self.counterparty_stderr
+        """Good for us on our model, and a yes from them on either lens.
+
+        Our side is judged by the model because the model is how we decide. Their
+        side is a prediction of *their* decision, and a manager reads box scores:
+        Lamb for McCaffrey loses T Money 0.9% by our model and looks like 23.6
+        points a game for 19.3 to him. Requiring our model's approval for their
+        side hid exactly the deals that exploit that gap.
+        """
+        box_yes = bool(self.box_score_accepts) and (
+            self.counterparty_delta >= -PERCEPTION_MAX_MODEL_LOSS
+        )
+        return self.significant and (self.model_accepts or box_yes)
 
     def summary(self) -> str:
         direction = "+" if self.title_delta >= 0 else ""
@@ -318,6 +365,7 @@ def evaluate_move(
     counterparty_id: int | None = None,
     context: SimulationContext | None = None,
     baseline: SeasonOutcome | None = None,
+    perceived: dict | None = None,
 ) -> MoveEvaluation:
     """Simulate the season with and without a proposed move.
 
@@ -392,6 +440,14 @@ def evaluate_move(
             + ", ".join(getattr(p, "player", "?") for p in drop)
         )
 
+    box = box_score(drop, add, perceived) if counterparty_id is not None else None
+    lineup_seen = None
+    if perceived is not None and counterparty_id is not None:
+        span = (list(context.weeks), context.current_week)
+        lineup_seen = (
+            perceived_lineup(rosters[counterparty_id], perceived, settings, *span),
+            perceived_lineup(updated[counterparty_id], perceived, settings, *span),
+        )
     title_before = before.championship.get(my_team_id, 0.0)
     counterparty_before = (
         before.championship.get(counterparty_id, 0.0) if counterparty_id is not None else 0.0
@@ -412,7 +468,104 @@ def evaluate_move(
         counterparty_weekly_delta=counterparty_weekly_delta,
         incoming=incoming,
         outgoing=outgoing,
+        box_they_get=box[0] if box else None,
+        box_they_give=box[1] if box else None,
+        box_lineup_before=lineup_seen[0] if lineup_seen else None,
+        box_lineup_after=lineup_seen[1] if lineup_seen else None,
     )
+
+
+#: How much better, in points a week, their own lineup must look to them before a
+#: trade counts as a yes. A tie is not a win; a manager needs a reason to move.
+BOX_SCORE_MARGIN = 1.0
+
+#: The most title probability our model may say they lose on a deal the box
+#: score says they would take. A perception gap can flip a small loss into a yes;
+#: it cannot credibly hide a large one. McCaffrey and Cook for Jaylen Warren and
+#: Sam LaPorta read as a better lineup to T Money — LaPorta filled a 2.8-a-game
+#: tight end — while the model had him losing 8.9%, because half his roster was
+#: outscoring its projection on three games. A deal that lopsided is either
+#: refused on reputation or vetoed as a fleecing. Lamb for McCaffrey, at -0.87%,
+#: is the kind of gap this lane exists for.
+PERCEPTION_MAX_MODEL_LOSS = 0.01
+
+#: The same cap in season points, for screening before anything is simulated.
+#: Lamb for McCaffrey cost T Money 3.5 season points (-0.87%); the lopsided
+#: McCaffrey-and-Cook deal cost 90 (-8.9%). About a point a week separates them.
+PERCEPTION_SCREEN_POINTS = 10.0
+
+
+@dataclass(frozen=True)
+class _Seen:
+    position: str
+    mean: float
+    bye_week: int | None = None
+    return_week: int | None = None
+    on_bye: bool = False
+    unavailable: bool = False
+
+
+def perceived_lineup(
+    roster: list,
+    perceived: dict,
+    settings,
+    weeks: list[int] | None = None,
+    current_week: int | None = None,
+) -> float:
+    """Their lineup, points a week, as they would value it: box score where there is one.
+
+    Each player is worth his season points per game when he has played enough to
+    have one, and his projection otherwise. The lineup is what a manager judges a
+    trade by — not the sum of the players changing hands, which ignores fit. Two
+    starting running backs for two players with a slightly higher combined average
+    still guts a lineup, and he can see that.
+
+    With `weeks`, it is the average over the rest of the season with byes and
+    injuries applied. A manager knows A.J. Brown is on injured reserve until
+    November; valuing him as a starter today made every deal selling him look
+    better to the buyer than it would.
+    """
+    seen = [
+        _Seen(
+            p.position,
+            perceived.get(getattr(p, "espn_id", None), p.mean),
+            getattr(p, "bye_week", None),
+            getattr(p, "return_week", None),
+            getattr(p, "on_bye", False),
+            getattr(p, "unavailable", False),
+        )
+        for p in roster
+    ]
+    if weeks and is_greedy_exact(settings):
+        return season_total(seen, weeks, current_week, settings) / len(weeks)
+    return best_points(seen, settings)
+
+
+#: Positions a manager weighs when reading a trade. A defence's ten points a game
+#: is not valued like a receiver's, and counting it made D/ST throw-ins look like
+#: sweeteners when nobody treats them as one.
+BOX_SCORE_POSITIONS = frozenset({"QB", "RB", "WR", "TE"})
+
+
+def box_score(to_them: list, from_them: list, perceived: dict | None) -> tuple[float, float] | None:
+    """(points a game they receive, points a game they give up), skill players only.
+
+    Unknown when any skill player in the package has no season stats. Counting
+    him as zero made every package of unknowns "pass" at 0 against 0 — the first
+    version flooded the shortlist with deals no manager had any reason to accept.
+    """
+    if perceived is None:
+        return None
+    skill = [
+        p for p in [*to_them, *from_them] if getattr(p, "position", None) in BOX_SCORE_POSITIONS
+    ]
+    if any(getattr(p, "espn_id", None) not in perceived for p in skill):
+        return None
+
+    def total(players):
+        return sum(perceived[p.espn_id] for p in players if p.position in BOX_SCORE_POSITIONS)
+
+    return total(to_them), total(from_them)
 
 
 def _profile_delta(context: SimulationContext, before: list, after: list) -> tuple[float, ...]:
@@ -457,6 +610,7 @@ def find_trades(
     baseline: SeasonOutcome | None = None,
     package_sizes: tuple[int, ...] = (1, 2),
     shortlist: int = 40,
+    perceived: dict | None = None,
 ) -> list[MoveEvaluation]:
     """Search opponent rosters for swaps that help both sides.
 
@@ -511,11 +665,21 @@ def find_trades(
     if give_depth is not None:
         give_pool = give_pool[:give_depth]
 
+    # Two lanes. Deals our model says help both sides, ranked by whichever side
+    # gains least; and, when season stats are supplied, deals our model says hurt
+    # them but their box score says they would take, ranked by our gain. Each
+    # gets half the shortlist so neither crowds the other out.
     screened: list[tuple[float, None, int, list, list]] = []
+    perception_lane: list[tuple[float, None, int, list, list]] = []
     for team_id, roster in rosters.items():
         if team_id == my_team_id or not roster:
             continue
         their_before = season(roster)
+        their_seen_before = (
+            perceived_lineup(roster, perceived, context.settings, weeks, current)
+            if perceived is not None
+            else 0.0
+        )
         get_pool = sorted(roster, key=lambda p: marginal_gain(my_roster, p, context), reverse=True)
         if get_depth is not None:
             get_pool = get_pool[:get_depth]
@@ -534,9 +698,25 @@ def find_trades(
                     if my_gain <= 0:
                         continue
                     their_gain = season(their_kept + list(give)) - their_before
-                    # A proposal they refuse is worthless, so both sides must
-                    # gain on points before it is worth a simulation.
-                    if my_gain <= 0 or their_gain <= 0:
+                    # A proposal they refuse is worthless, so they must gain —
+                    # on our model, or on the box score they will actually read.
+                    if their_gain <= 0:
+                        if perceived is not None:
+                            seen_after = perceived_lineup(
+                                their_kept + list(give), perceived, context.settings, weeks, current
+                            )
+                            # Only deals our model calls a small loss for them can
+                            # survive the title cap after simulation, so screen on
+                            # that first; then rank by what they are worth to us.
+                            # Ranking by least harm instead filled the lane with
+                            # trivial swaps that moved nothing for either side.
+                            if (
+                                their_gain >= -PERCEPTION_SCREEN_POINTS
+                                and seen_after - their_seen_before >= BOX_SCORE_MARGIN
+                            ):
+                                perception_lane.append(
+                                    (my_gain, None, team_id, list(get), list(give))
+                                )
                         continue
                     # Rank by whichever side gains *least*. Sorting by our own
                     # gain fills the shortlist with deals that are wonderful for
@@ -550,9 +730,17 @@ def find_trades(
                     )
 
     screened.sort(key=lambda row: -row[0])
+    perception_lane.sort(key=lambda row: -row[0])
+    if perceived is None:
+        chosen = screened[:shortlist]
+    else:
+        half = shortlist // 2
+        chosen = screened[:half] + perception_lane[:half]
+        spare = shortlist - len(chosen)
+        chosen += (screened[half:] + perception_lane[half:])[:spare]
 
     accepted = []
-    for _, _, team_id, get, give in screened[:shortlist]:
+    for _, _, team_id, get, give in chosen:
         move = evaluate_move(
             my_team_id,
             rosters,
@@ -566,6 +754,7 @@ def find_trades(
             counterparty_id=team_id,
             context=context,
             baseline=baseline,
+            perceived=perceived,
         )
         if move.mutually_acceptable:
             accepted.append(move)
