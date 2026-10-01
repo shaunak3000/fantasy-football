@@ -70,6 +70,9 @@ class RosterPlayer:
     #: First week this player can score, when he is out beyond this week — from
     #: `data/injury_returns.json` or the IR four-game floor. None means available.
     return_week: int | None = None
+    #: Points the market blend added to (or took from) ESPN's projection this
+    #: week. `week_mean` already includes it; ESPN's own number is the difference.
+    market_delta: float = 0.0
 
     @property
     def started(self) -> bool:
@@ -171,6 +174,7 @@ def build_state(
     byes: dict[int, int] | None = None,
     weekly_projections: dict[int, WeeklyProjection] | None = None,
     return_weeks: dict[int, int] | None = None,
+    weekly_adjustments: dict[int, float] | None = None,
 ) -> LeagueState:
     """Assemble rosters, remaining schedule, and standings from the live league.
 
@@ -181,6 +185,7 @@ def build_state(
     by_id = {p.espn_id: p for p in projections if p.espn_id is not None}
     byes = byes or {}
     return_weeks = return_weeks or {}
+    weekly_adjustments = weekly_adjustments or {}
     weekly_projections = weekly_projections or {}
 
     def to_roster_player(espn_id, name, position, slot_id=UNKNOWN_SLOT_ID) -> RosterPlayer | None:
@@ -190,8 +195,12 @@ def build_state(
         mean, sd = _weekly_estimate(projection, weekly_model)
 
         published = weekly_projections.get(espn_id)
+        market_delta = 0.0
         if published is not None and published.points > 0:
-            week_mean = published.points
+            # The measured blend: ESPN's points with the market's yardage swapped
+            # in (`projections/market.py`). Zero when there is no market reading.
+            market_delta = weekly_adjustments.get(espn_id, 0.0)
+            week_mean = max(published.points + market_delta, 0.0)
             week_sd = max(week_mean * WEEKLY_CV.get(position, UNFITTED_WEEKLY_CV), 1.0)
         else:
             week_mean, week_sd = mean, sd
@@ -228,6 +237,7 @@ def build_state(
             injury_status=injury_status,
             unavailable=unavailable,
             return_week=return_weeks.get(espn_id),
+            market_delta=market_delta,
         )
 
     state = LeagueState(settings=settings, current_week=current_week)

@@ -23,11 +23,19 @@ from .config import load_credentials
 from .data.espn import fetch_raw_settings, fetch_weekly_projections, parse_settings
 from .data.espn_injuries import load_report
 from .data.injuries import league_return_weeks
-from .data.snapshots import capture_and_save, load_season, weeks_awaiting_results
+from .data.kalshi import KalshiClient
+from .data.snapshots import capture_and_save, load_season, points_per_game, weeks_awaiting_results
 from .draft.cache import load_bundle
 from .draft.live import my_team_id
 from .lineup.optimizer import best_lineup_against, optimize
 from .projections.history import training_table
+from .projections.market import (
+    kickoffs,
+    load_offsets,
+    market_adjustments,
+    open_medians,
+    week_window,
+)
 from .projections.scoring import ScoringEngine
 from .projections.weekly import WeeklyModel
 from .season.league_state import build_state, bye_weeks_by_espn_id, this_week
@@ -115,6 +123,19 @@ def _lineup_section(state, my_id, settings, week, returning=None) -> list:
             source = info.source if info else "?"
             notes.append(f"{p.player} wk{p.return_week} ({source})")
         print("\n  BACK LATER: " + ", ".join(notes))
+
+    # Where the market moved a projection by a point or more, show both numbers:
+    # the lineup above already uses the blended one.
+    moved = sorted(
+        (p for p in week_roster if abs(getattr(p, "market_delta", 0.0)) >= 1.0),
+        key=lambda p: -abs(p.market_delta),
+    )
+    if moved:
+        notes = [
+            f"{p.player} {p.mean - p.market_delta:.1f} -> {p.mean:.1f} ({p.market_delta:+.1f})"
+            for p in moved
+        ]
+        print("\n  MARKET VIEW (ESPN -> blended): " + ", ".join(notes))
 
     # A bye collision two weeks out is fixable now and unfixable then, so the
     # report looks ahead rather than only at the week in front of you.
@@ -204,6 +225,28 @@ def main(argv: list[str]) -> int:
         )
         reported = None
     returning = league_return_weeks(published, week, season, load_season(season), reported=reported)
+
+    # The market's second opinion: ESPN's points with Kalshi's yardage swapped
+    # in, the blend `check_kalshi` measured as slightly better (mostly at RB).
+    # Any failure — network, no offsets yet, no open markets — leaves ESPN alone.
+    adjustments: dict[int, float] = {}
+    try:
+        offsets = load_offsets()
+        window = week_window(kickoffs(season), week)
+        if not offsets:
+            market_note = "Kalshi blend OFF — no offsets yet; run check_kalshi"
+        elif window is None:
+            market_note = "Kalshi blend OFF — no schedule for this week"
+        else:
+            medians = open_medians(KalshiClient(), window)
+            adjustments = market_adjustments(published, medians, offsets)
+            market_note = (
+                f"Kalshi blend on — {len(medians)} yardage ladders priced, "
+                f"{len(adjustments)} projections adjusted"
+            )
+    except Exception as exc:  # noqa: BLE001 - the market is a second opinion, never a dependency
+        adjustments = {}
+        market_note = f"Kalshi UNAVAILABLE ({type(exc).__name__}) — ESPN projections only"
     state = build_state(
         league,
         settings,
@@ -213,6 +256,7 @@ def main(argv: list[str]) -> int:
         byes=bye_weeks_by_espn_id() if season == SEASON else {},
         weekly_projections=published,
         return_weeks={pid: info.week for pid, info in returning.items()},
+        weekly_adjustments=adjustments,
     )
 
     my_id = my_team_id(league, creds.swid)
@@ -241,7 +285,8 @@ def main(argv: list[str]) -> int:
         captures.append(capture_and_save(league, finished_week, season))
 
     print(f"_Snapshot: {'; '.join(captures)}._")
-    print(f"_Injuries: {report_note}._\n")
+    print(f"_Injuries: {report_note}._")
+    print(f"_Market: {market_note}._\n")
 
     # One baseline, computed once, shared by every section below. The standings
     # table, the waiver deltas and the trade deltas are all differences against
@@ -324,6 +369,10 @@ def main(argv: list[str]) -> int:
     print("\n## Trades worth proposing\n")
     print("_Advisory. Only trades that help both sides are listed; a proposal they_")
     print("_refuse is worthless, so their title delta is shown too._\n")
+    # How each player looks to the manager across the table: this season's box
+    # score. Our model decides whether a deal is good for us; this predicts
+    # whether they will say yes.
+    perceived = points_per_game(load_season(season), min_games=2)
     trades = find_trades(
         my_id,
         state.rosters,
@@ -334,6 +383,7 @@ def main(argv: list[str]) -> int:
         banked=state.banked,
         context=context,
         baseline=baseline,
+        perceived=perceived,
     )
     if not trades:
         print("  Nothing mutually beneficial found this week.")
@@ -355,6 +405,17 @@ def _print_trade(move, partner: str) -> None:
         f"      title    you {move.title_delta:+.2%} +/-{move.title_stderr:.2%}"
         f"    them {move.counterparty_delta:+.2%} +/-{move.counterparty_stderr:.2%}"
     )
+    if move.box_lineup_change is not None:
+        reads = "a clear win to them" if move.box_score_accepts else "not a clear win to them"
+        traded = (
+            f"; traded players {move.box_they_get:.1f} ppg in, {move.box_they_give:.1f} out"
+            if move.box_they_get is not None
+            else ""
+        )
+        print(
+            f"      box score  their lineup {move.box_lineup_change:+.1f}/wk as they see it"
+            f" — {reads}{traded}   (acceptable on: {move.accepted_on})"
+        )
     if move.weekly_delta:
         ours, theirs = move.worst_week(), move.worst_week("them")
         print(

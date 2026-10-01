@@ -346,6 +346,13 @@ class WeeklyProjection:
     position: str | None
     points: float
     injury_status: str | None
+    #: Projected yards by stat ("passing", "rushing", "receiving"), as pairs so
+    #: the projection stays hashable. Kept because the market prices yardage, and
+    #: swapping ESPN's yardage for the market's is the blend that was measured.
+    yards: tuple[tuple[str, float], ...] = ()
+
+    def yards_for(self, stat: str) -> float | None:
+        return dict(self.yards).get(stat)
 
     @property
     def unavailable(self) -> bool:
@@ -365,6 +372,22 @@ class WeeklyProjection:
 
 
 UNAVAILABLE_INJURY_STATUSES = frozenset({"OUT", "INJURY_RESERVE", "DOUBTFUL", "SUSPENSION"})
+
+
+#: ESPN stat ids per yardage stat. Each is published twice and scored once (see
+#: the scoring engine); the first id is the scored one, the second its twin.
+YARD_IDS = {"passing": (3, 22), "rushing": (24, 40), "receiving": (42, 61)}
+
+
+def projected_yards(stats: dict) -> tuple[tuple[str, float], ...]:
+    """(stat, yards) for every yardage stat present in an ESPN stat block."""
+    out = []
+    for stat, ids in YARD_IDS.items():
+        for key in ids:
+            if str(key) in stats:
+                out.append((stat, float(stats[str(key)])))
+                break
+    return tuple(out)
 
 
 def fetch_weekly_projections(
@@ -418,5 +441,6 @@ def fetch_weekly_projections(
             position=PLAYER_POSITION_BY_ID.get(player.get("defaultPositionId", -1)),
             points=float(block.get("appliedTotal") or 0.0),
             injury_status=player.get("injuryStatus"),
+            yards=projected_yards(block.get("stats") or {}),
         )
     return projections
